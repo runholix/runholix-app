@@ -5,6 +5,16 @@ import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 router.use(requireAuth);
 
+function num(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
+function str(v) {
+  return (v === '' || v === undefined) ? null : v;
+}
+
 function formatSeconds(s) {
   if (!s) return null;
   const h = Math.floor(s / 3600);
@@ -86,17 +96,8 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const {
-    event_name, race_date, location, city, country, website_url,
-    status, registration_fee, registration_currency, bib_number, confirmation_number,
-    distance_km, distance_label, race_type, category,
-    finish_time, gun_time, overall_place, overall_total,
-    gender_place, gender_total, age_group_place, age_group_total, age_group_label,
-    heart_rate_avg, heart_rate_max, elevation_gain_m,
-    weather_temp_c, weather_condition, notes, race_report, results_url, certificate_url
-  } = req.body;
-
-  if (!event_name || !race_date) return res.status(400).json({ error: 'event_name and race_date required' });
+  const b = req.body;
+  if (!b.event_name || !b.race_date) return res.status(400).json({ error: 'event_name and race_date required' });
 
   try {
     const { rows } = await pool.query(`
@@ -113,14 +114,18 @@ router.post('/', async (req, res) => {
         $17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34
       ) RETURNING *`,
       [
-        req.userId, event_name, race_date, location, city, country, website_url,
-        status || 'registered', registration_fee, registration_currency || 'USD',
-        bib_number, confirmation_number, distance_km, distance_label, race_type, category,
-        parseTimeToSeconds(finish_time), parseTimeToSeconds(gun_time),
-        overall_place, overall_total, gender_place, gender_total,
-        age_group_place, age_group_total, age_group_label,
-        heart_rate_avg, heart_rate_max, elevation_gain_m,
-        weather_temp_c, weather_condition, notes, race_report, results_url, certificate_url
+        req.userId, b.event_name, b.race_date,
+        str(b.location), str(b.city), str(b.country), str(b.website_url),
+        b.status || 'registered', num(b.registration_fee), b.registration_currency || 'USD',
+        str(b.bib_number), str(b.confirmation_number),
+        num(b.distance_km), str(b.distance_label), str(b.race_type), str(b.category),
+        parseTimeToSeconds(b.finish_time), parseTimeToSeconds(b.gun_time),
+        num(b.overall_place), num(b.overall_total),
+        num(b.gender_place), num(b.gender_total),
+        num(b.age_group_place), num(b.age_group_total), str(b.age_group_label),
+        num(b.heart_rate_avg), num(b.heart_rate_max), num(b.elevation_gain_m),
+        num(b.weather_temp_c), str(b.weather_condition),
+        str(b.notes), str(b.race_report), str(b.results_url), str(b.certificate_url)
       ]
     );
     res.status(201).json(mapRace(rows[0]));
@@ -131,15 +136,7 @@ router.post('/', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const {
-    event_name, race_date, location, city, country, website_url,
-    status, registration_fee, registration_currency, bib_number, confirmation_number,
-    distance_km, distance_label, race_type, category,
-    finish_time, gun_time, overall_place, overall_total,
-    gender_place, gender_total, age_group_place, age_group_total, age_group_label,
-    heart_rate_avg, heart_rate_max, elevation_gain_m,
-    weather_temp_c, weather_condition, notes, race_report, results_url, certificate_url
-  } = req.body;
+  const b = req.body;
 
   try {
     const { rows } = await pool.query(`
@@ -154,15 +151,20 @@ router.put('/:id', async (req, res) => {
         results_url=$32, certificate_url=$33, updated_at=NOW()
       WHERE id=$34 AND user_id=$35 RETURNING *`,
       [
-        event_name, race_date, location, city, country, website_url,
-        status, registration_fee, registration_currency, bib_number, confirmation_number,
-        distance_km, distance_label, race_type, category,
-        parseTimeToSeconds(finish_time), parseTimeToSeconds(gun_time),
-        overall_place, overall_total, gender_place, gender_total,
-        age_group_place, age_group_total, age_group_label,
-        heart_rate_avg, heart_rate_max, elevation_gain_m,
-        weather_temp_c, weather_condition, notes, race_report,
-        results_url, certificate_url, req.params.id, req.userId
+        b.event_name, b.race_date,
+        str(b.location), str(b.city), str(b.country), str(b.website_url),
+        b.status, num(b.registration_fee), b.registration_currency || 'USD',
+        str(b.bib_number), str(b.confirmation_number),
+        num(b.distance_km), str(b.distance_label), str(b.race_type), str(b.category),
+        parseTimeToSeconds(b.finish_time), parseTimeToSeconds(b.gun_time),
+        num(b.overall_place), num(b.overall_total),
+        num(b.gender_place), num(b.gender_total),
+        num(b.age_group_place), num(b.age_group_total), str(b.age_group_label),
+        num(b.heart_rate_avg), num(b.heart_rate_max), num(b.elevation_gain_m),
+        num(b.weather_temp_c), str(b.weather_condition),
+        str(b.notes), str(b.race_report),
+        str(b.results_url), str(b.certificate_url),
+        req.params.id, req.userId
       ]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });

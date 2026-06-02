@@ -15,9 +15,9 @@ const EMPTY = {
   notes: '', race_report: '', results_url: '', certificate_url: '',
 };
 
-function Field({ label, children, span }) {
+function Field({ label, children, className }) {
   return (
-    <div className="form-group" style={span ? { gridColumn: `span ${span}` } : {}}>
+    <div className={`form-group${className ? ' ' + className : ''}`}>
       <label className="form-label">{label}</label>
       {children}
     </div>
@@ -37,12 +37,10 @@ export default function RaceFormPage() {
     if (!isEdit) return;
     api.getRace(id).then(race => {
       setForm({
-        event_name: race.event_name || '',
-        race_date: race.race_date?.slice(0, 10) || '',
+        event_name: race.event_name || '', race_date: race.race_date?.slice(0, 10) || '',
         location: race.location || '', city: race.city || '', country: race.country || '',
         website_url: race.website_url || '', status: race.status || 'registered',
-        registration_fee: race.registration_fee || '',
-        registration_currency: race.registration_currency || 'USD',
+        registration_fee: race.registration_fee || '', registration_currency: race.registration_currency || 'USD',
         bib_number: race.bib_number || '', confirmation_number: race.confirmation_number || '',
         distance_km: race.distance_km || '', distance_label: race.distance_label || '',
         race_type: race.race_type || 'road', category: race.category || '',
@@ -74,19 +72,17 @@ export default function RaceFormPage() {
     }
   };
 
-  if (loading) return <div style={{ padding: 40, color: 'var(--color-text-muted)' }}>Loading…</div>;
+  if (loading) return <div className="page" style={{ color: 'var(--color-text-muted)' }}>Loading…</div>;
 
   const showResults = form.status === 'completed' || form.status === 'dnf';
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 820 }}>
+    <div className="page" style={{ maxWidth: 820 }}>
       <Link to={isEdit ? `/races/${id}` : '/races'} style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
         <i className="ti ti-arrow-left" /> {isEdit ? 'Back to race' : 'Back to races'}
       </Link>
 
-      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 24 }}>
-        {isEdit ? 'Edit race' : 'Add new race'}
-      </h1>
+      <h1 className="page-title" style={{ marginBottom: 24 }}>{isEdit ? 'Edit race' : 'Add new race'}</h1>
 
       {error && (
         <div style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 20 }}>
@@ -96,9 +92,11 @@ export default function RaceFormPage() {
 
       <form onSubmit={submit}>
         <div className="card">
+
+          {/* Event info */}
           <div className="form-section-title" style={{ marginTop: 0 }}>Event info</div>
-          <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
-            <Field label="Event name *" span={2}>
+          <div className="grid-form-2" style={{ marginBottom: 16 }}>
+            <Field label="Event name *" className="span-2">
               <input value={form.event_name} onChange={set('event_name')} placeholder="e.g. Jakarta Marathon 2024" required />
             </Field>
             <Field label="Race date *">
@@ -127,8 +125,9 @@ export default function RaceFormPage() {
             </Field>
           </div>
 
+          {/* Registration */}
           <div className="form-section-title">Registration</div>
-          <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+          <div className="grid-form-4" style={{ marginBottom: 16 }}>
             <Field label="Bib number">
               <input value={form.bib_number} onChange={set('bib_number')} placeholder="1234" />
             </Field>
@@ -145,8 +144,9 @@ export default function RaceFormPage() {
             </Field>
           </div>
 
+          {/* Distance */}
           <div className="form-section-title">Distance & category</div>
-          <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+          <div className="grid-form-4" style={{ marginBottom: 16 }}>
             <Field label="Distance (km)">
               <input type="number" value={form.distance_km} onChange={set('distance_km')} placeholder="42.195" step="0.001" />
             </Field>
@@ -167,17 +167,18 @@ export default function RaceFormPage() {
             </Field>
           </div>
 
+          {/* Results — only if completed/dnf */}
           {showResults && (<>
             <div className="form-section-title">Results</div>
-            <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div className="grid-form-2" style={{ marginBottom: 16 }}>
               <Field label="Finish time (chip) HH:MM:SS">
-                <input value={form.finish_time} onChange={set('finish_time')} placeholder="04:32:15" pattern="\d{1,2}:\d{2}:\d{2}" />
+                <input value={form.finish_time} onChange={set('finish_time')} placeholder="04:32:15" />
               </Field>
               <Field label="Gun time HH:MM:SS">
-                <input value={form.gun_time} onChange={set('gun_time')} placeholder="04:34:01" pattern="\d{1,2}:\d{2}:\d{2}" />
+                <input value={form.gun_time} onChange={set('gun_time')} placeholder="04:34:01" />
               </Field>
             </div>
-            <div className="form-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+            <div className="grid-form-6" style={{ marginBottom: 16 }}>
               <Field label="Overall place"><input type="number" value={form.overall_place} onChange={set('overall_place')} /></Field>
               <Field label="Overall total"><input type="number" value={form.overall_total} onChange={set('overall_total')} /></Field>
               <Field label="Gender place"><input type="number" value={form.gender_place} onChange={set('gender_place')} /></Field>
@@ -185,7 +186,7 @@ export default function RaceFormPage() {
               <Field label="Age group place"><input type="number" value={form.age_group_place} onChange={set('age_group_place')} /></Field>
               <Field label="Age group total"><input type="number" value={form.age_group_total} onChange={set('age_group_total')} /></Field>
             </div>
-            <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+            <div className="grid-form-4" style={{ marginBottom: 16 }}>
               <Field label="Age group label">
                 <input value={form.age_group_label} onChange={set('age_group_label')} placeholder="M40-44" />
               </Field>
@@ -193,7 +194,7 @@ export default function RaceFormPage() {
               <Field label="Max HR (bpm)"><input type="number" value={form.heart_rate_max} onChange={set('heart_rate_max')} /></Field>
               <Field label="Elevation gain (m)"><input type="number" value={form.elevation_gain_m} onChange={set('elevation_gain_m')} /></Field>
             </div>
-            <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div className="grid-form-3" style={{ marginBottom: 16 }}>
               <Field label="Temp (°C)"><input type="number" value={form.weather_temp_c} onChange={set('weather_temp_c')} step="0.1" /></Field>
               <Field label="Weather">
                 <select value={form.weather_condition} onChange={set('weather_condition')}>
@@ -201,19 +202,20 @@ export default function RaceFormPage() {
                   {['Sunny','Partly cloudy','Overcast','Light rain','Heavy rain','Hot & humid','Cool','Cold','Windy'].map(w => <option key={w}>{w}</option>)}
                 </select>
               </Field>
-            </div>
-            <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <Field label="Official results URL">
                 <input type="url" value={form.results_url} onChange={set('results_url')} placeholder="https://…" />
               </Field>
+            </div>
+            <div className="grid-form-2" style={{ marginBottom: 16 }}>
               <Field label="Certificate URL">
                 <input type="url" value={form.certificate_url} onChange={set('certificate_url')} placeholder="https://…" />
               </Field>
             </div>
           </>)}
 
+          {/* Notes */}
           <div className="form-section-title">Notes</div>
-          <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 8 }}>
             <Field label="Quick notes">
               <textarea value={form.notes} onChange={set('notes')} rows={3} placeholder="Pre-race goals, logistics, reminders…" style={{ resize: 'vertical' }} />
             </Field>
@@ -222,7 +224,8 @@ export default function RaceFormPage() {
             </Field>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--color-border)' }}>
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
             <Link to={isEdit ? `/races/${id}` : '/races'} className="btn btn-secondary">Cancel</Link>
             <button type="submit" className="btn btn-primary" disabled={saving}>
               <i className={`ti ${saving ? 'ti-loader' : 'ti-check'}`} />

@@ -17,6 +17,35 @@ const STATUS_META = {
   dns:        { label: 'DNS',        cls: 'badge-dns' },
 };
 
+/* Mobile card view for each race */
+function RaceCard({ r }) {
+  const sm = STATUS_META[r.status] || {};
+  return (
+    <Link to={`/races/${r.id}`} style={{ display: 'block', color: 'inherit' }}>
+      <div className="card" style={{ padding: '14px 16px', marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+          <div style={{ fontWeight: 500, fontSize: 14, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.event_name}
+          </div>
+          <span className={`badge ${sm.cls}`} style={{ flexShrink: 0 }}>{sm.label}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--color-text-muted)' }}>
+          {r.race_date && <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 3 }} />{format(parseISO(r.race_date), 'dd MMM yyyy')}</span>}
+          {(r.city || r.location) && <span><i className="ti ti-map-pin" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.city || r.location}</span>}
+          {(r.distance_label || r.distance_km) && <span><i className="ti ti-route" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.distance_label || `${parseFloat(r.distance_km).toFixed(1)} km`}</span>}
+        </div>
+        {(r.finish_time_seconds || r.bib_number) && (
+          <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
+            {r.bib_number && <span style={{ color: 'var(--color-text-muted)' }}>Bib <strong style={{ color: 'var(--color-text)' }}>#{r.bib_number}</strong></span>}
+            {r.finish_time_seconds && <span style={{ color: 'var(--color-text-muted)' }}>Time <strong style={{ color: 'var(--color-success)' }}>{fmtTime(r.finish_time_seconds)}</strong></span>}
+            {r.overall_place && <span style={{ color: 'var(--color-text-muted)' }}>Place <strong style={{ color: 'var(--color-text)' }}>{r.overall_place}{r.overall_total ? `/${r.overall_total}` : ''}</strong></span>}
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 export default function RacesPage() {
   const [races, setRaces] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,20 +67,21 @@ export default function RacesPage() {
   const years = [...new Set(races.map(r => r.race_date?.slice(0,4)).filter(Boolean))].sort().reverse();
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1100 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+    <div className="page" style={{ maxWidth: 1100 }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 600 }}>My Races</h1>
-          <p style={{ color: 'var(--color-text-muted)', marginTop: 4 }}>{races.length} total</p>
+          <h1 className="page-title">My Races</h1>
+          <p className="page-subtitle">{races.length} total</p>
         </div>
         <Link to="/races/new" className="btn btn-primary">
           <i className="ti ti-plus" /> Add race
         </Link>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-hint)', fontSize: 15 }} />
+      {/* Filters */}
+      <div className="filters-bar">
+        <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 0 }}>
+          <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-hint)', fontSize: 15, pointerEvents: 'none' }} />
           <input
             placeholder="Search races…"
             value={filters.search}
@@ -59,11 +89,11 @@ export default function RacesPage() {
             style={{ paddingLeft: 32 }}
           />
         </div>
-        <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))} style={{ width: 150 }}>
+        <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))} style={{ flex: '0 0 auto', width: 'auto', minWidth: 130 }}>
           <option value="">All statuses</option>
           {Object.entries(STATUS_META).map(([v, m]) => <option key={v} value={v}>{m.label}</option>)}
         </select>
-        <select value={filters.year} onChange={e => setFilters(f => ({ ...f, year: e.target.value }))} style={{ width: 120 }}>
+        <select value={filters.year} onChange={e => setFilters(f => ({ ...f, year: e.target.value }))} style={{ flex: '0 0 auto', width: 'auto', minWidth: 110 }}>
           <option value="">All years</option>
           {years.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
@@ -81,55 +111,55 @@ export default function RacesPage() {
           </Link>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--color-bg)' }}>
-                {['Event', 'Date', 'Distance', 'Bib', 'Finish time', 'Placement', 'Status', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {races.map(r => {
-                const sm = STATUS_META[r.status] || {};
-                return (
-                  <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg)'}
-                    onMouseLeave={e => e.currentTarget.style.background = ''}>
-                    <td style={{ padding: '12px 16px' }}>
-                      <Link to={`/races/${r.id}`} style={{ fontWeight: 500, color: 'var(--color-primary)' }}>{r.event_name}</Link>
-                      {r.city && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{r.city}{r.country ? `, ${r.country}` : ''}</div>}
-                    </td>
-                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', fontSize: 13 }}>
-                      {r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 13 }}>
-                      {r.distance_label || (r.distance_km ? `${parseFloat(r.distance_km).toFixed(1)} km` : '—')}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--color-text-muted)' }}>
-                      {r.bib_number ? `#${r.bib_number}` : '—'}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500 }}>
-                      {fmtTime(r.finish_time_seconds) || '—'}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 13 }}>
-                      {r.overall_place ? `${r.overall_place}${r.overall_total ? `/${r.overall_total}` : ''}` : '—'}
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span className={`badge ${sm.cls}`}>{sm.label}</span>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <Link to={`/races/${r.id}/edit`} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: 13 }}>
-                        <i className="ti ti-edit" />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Mobile card list (< 768px) */}
+          <div className="mobile-only">
+            {races.map(r => <RaceCard key={r.id} r={r} />)}
+          </div>
+
+          {/* Table (≥ 768px) */}
+          <div className="tablet-up">
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      {['Event', 'Date', 'Distance', 'Bib', 'Finish time', 'Placement', 'Status', ''].map(h => (
+                        <th key={h}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {races.map(r => {
+                      const sm = STATUS_META[r.status] || {};
+                      return (
+                        <tr key={r.id}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg)'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}>
+                          <td>
+                            <Link to={`/races/${r.id}`} style={{ fontWeight: 500, color: 'var(--color-primary)' }}>{r.event_name}</Link>
+                            {r.city && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{r.city}{r.country ? `, ${r.country}` : ''}</div>}
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'}</td>
+                          <td>{r.distance_label || (r.distance_km ? `${parseFloat(r.distance_km).toFixed(1)} km` : '—')}</td>
+                          <td style={{ color: 'var(--color-text-muted)' }}>{r.bib_number ? `#${r.bib_number}` : '—'}</td>
+                          <td style={{ fontWeight: 500 }}>{fmtTime(r.finish_time_seconds) || '—'}</td>
+                          <td>{r.overall_place ? `${r.overall_place}${r.overall_total ? `/${r.overall_total}` : ''}` : '—'}</td>
+                          <td><span className={`badge ${sm.cls}`}>{sm.label}</span></td>
+                          <td>
+                            <Link to={`/races/${r.id}/edit`} className="btn btn-ghost" style={{ padding: '4px 8px' }}>
+                              <i className="ti ti-edit" />
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

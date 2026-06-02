@@ -20,11 +20,6 @@ function fmtDist(km) {
   return km >= 1000 ? `${(km/1000).toFixed(1)}k km` : `${parseFloat(km).toFixed(1)} km`;
 }
 
-const STATUS_COLORS = {
-  completed: '#15803d', registered: '#0369a1',
-  upcoming: '#b45309', dnf: '#dc2626', dns: '#7c3aed'
-};
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
@@ -48,18 +43,17 @@ export default function DashboardPage() {
   }, {});
   const chartData = Object.entries(yearlyData).sort().map(([year, count]) => ({ year, count }));
 
-  if (loading) return (
-    <div style={{ padding: 40, color: 'var(--color-text-muted)' }}>Loading dashboard…</div>
-  );
+  if (loading) return <div className="page" style={{ color: 'var(--color-text-muted)' }}>Loading dashboard…</div>;
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1100 }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600 }}>Welcome back, {user?.name?.split(' ')[0]} 👋</h1>
-        <p style={{ color: 'var(--color-text-muted)', marginTop: 4 }}>Here's your running race overview.</p>
+    <div className="page" style={{ maxWidth: 1100 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="page-title">Welcome back, {user?.name?.split(' ')[0]} 👋</h1>
+        <p className="page-subtitle">Here's your running race overview.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
+      {/* Stat cards — 2 col mobile, 4 col desktop */}
+      <div className="grid-stats" style={{ marginBottom: 24 }}>
         {[
           { label: 'Races completed', value: stats?.total_completed || 0, icon: 'ti-trophy', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
           { label: 'Upcoming', value: stats?.upcoming_count || 0, icon: 'ti-calendar-event', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
@@ -68,17 +62,18 @@ export default function DashboardPage() {
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 8, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, fontSize: 18 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, fontSize: 17, flexShrink: 0 }}>
                 <i className={`ti ${s.icon}`} />
               </div>
               <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500 }}>{s.label}</span>
             </div>
-            <div style={{ fontSize: 24, fontWeight: 600 }}>{s.value}</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>{s.value}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+      {/* PB + Chart — stacked mobile, side by side desktop */}
+      <div className="grid-halves" style={{ marginBottom: 24 }}>
         <div className="card">
           <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Personal bests</div>
           {[
@@ -112,25 +107,28 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      {/* Upcoming + Recent — stacked mobile, side by side desktop */}
+      <div className="grid-halves">
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
             <div style={{ fontWeight: 600, fontSize: 15 }}>Upcoming races</div>
-            <Link to="/races/new" className="btn btn-primary" style={{ fontSize: 12, padding: '5px 10px' }}>
+            <Link to="/races/new" className="btn btn-primary btn-sm">
               <i className="ti ti-plus" /> Add race
             </Link>
           </div>
           {upcoming.length === 0 ? (
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No upcoming races. <Link to="/races/new" style={{ color: 'var(--color-primary)' }}>Register one →</Link></div>
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
+              No upcoming races. <Link to="/races/new" style={{ color: 'var(--color-primary)' }}>Register one →</Link>
+            </div>
           ) : upcoming.map(r => (
             <Link to={`/races/${r.id}`} key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-border)', color: 'inherit' }}>
-              <div>
-                <div style={{ fontWeight: 500 }}>{r.event_name}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.event_name}</div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
                   {r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'} · {r.city || r.location || '—'}
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
+              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
                 {r.bib_number && <div style={{ fontSize: 12, fontWeight: 500 }}>#{r.bib_number}</div>}
                 {r.distance_label && <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{r.distance_label}</div>}
               </div>
@@ -147,13 +145,13 @@ export default function DashboardPage() {
             <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No completed races yet.</div>
           ) : recent.map(r => (
             <Link to={`/races/${r.id}`} key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-border)', color: 'inherit' }}>
-              <div>
-                <div style={{ fontWeight: 500 }}>{r.event_name}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.event_name}</div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
                   {r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'} · {r.distance_label || (r.distance_km ? `${r.distance_km} km` : '')}
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
+              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
                 <div style={{ fontWeight: 500, color: 'var(--color-success)' }}>{fmtTime(r.finish_time_seconds)}</div>
                 {r.overall_place && <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>#{r.overall_place}{r.overall_total ? `/${r.overall_total}` : ''}</div>}
               </div>

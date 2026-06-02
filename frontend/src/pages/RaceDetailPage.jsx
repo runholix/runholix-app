@@ -21,8 +21,8 @@ function Field({ label, value, mono }) {
   if (!value && value !== 0) return null;
   return (
     <div>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontWeight: 500, fontFamily: mono ? 'monospace' : undefined }}>{value}</div>
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontWeight: 500, fontFamily: mono ? 'monospace' : undefined, fontSize: 14 }}>{value}</div>
     </div>
   );
 }
@@ -31,11 +31,9 @@ function Section({ title, children }) {
   const anyChild = Array.isArray(children) ? children.some(Boolean) : !!children;
   if (!anyChild) return null;
   return (
-    <div style={{ marginBottom: 28 }}>
+    <div style={{ marginBottom: 24 }}>
       <div className="form-section-title">{title}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '16px 24px' }}>
-        {children}
-      </div>
+      <div className="detail-fields">{children}</div>
     </div>
   );
 }
@@ -58,55 +56,58 @@ export default function RaceDetailPage() {
     navigate('/races');
   };
 
-  if (loading) return <div style={{ padding: 40, color: 'var(--color-text-muted)' }}>Loading…</div>;
-  if (!race) return <div style={{ padding: 40 }}>Race not found.</div>;
+  if (loading) return <div className="page" style={{ color: 'var(--color-text-muted)' }}>Loading…</div>;
+  if (!race) return <div className="page">Race not found.</div>;
 
   const sm = STATUS_META[race.status] || {};
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 900 }}>
+    <div className="page" style={{ maxWidth: 900 }}>
+      <Link to="/races" style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16 }}>
+        <i className="ti ti-arrow-left" /> Back to races
+      </Link>
+
+      {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <Link to="/races" style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16 }}>
-          <i className="ti ti-arrow-left" /> Back to races
-        </Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-              <h1 style={{ fontSize: 24, fontWeight: 600 }}>{race.event_name}</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: 20, fontWeight: 600 }}>{race.event_name}</h1>
               <span className={`badge ${sm.cls}`}>{sm.label}</span>
             </div>
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 14, display: 'flex', gap: 16 }}>
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 13, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               {race.race_date && <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 4 }} />{format(parseISO(race.race_date), 'EEEE, d MMMM yyyy')}</span>}
               {(race.city || race.location) && <span><i className="ti ti-map-pin" style={{ verticalAlign: '-2px', marginRight: 4 }} />{race.city || race.location}{race.country ? `, ${race.country}` : ''}</span>}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <Link to={`/races/${id}/edit`} className="btn btn-secondary">
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+            <Link to={`/races/${id}/edit`} className="btn btn-secondary btn-sm">
               <i className="ti ti-edit" /> Edit
             </Link>
-            <button className="btn btn-danger" onClick={handleDelete} disabled={deleting}>
+            <button className="btn btn-danger btn-sm" onClick={handleDelete} disabled={deleting}>
               <i className="ti ti-trash" /> Delete
             </button>
           </div>
         </div>
       </div>
 
+      {/* Result highlight cards */}
       {race.status === 'completed' && race.finish_time_seconds && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
+        <div className="result-cards">
           {[
             { label: 'Finish time', value: fmtTime(race.finish_time_seconds), icon: 'ti-clock', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
             { label: 'Overall place', value: race.overall_place ? `${race.overall_place}${race.overall_total ? ` / ${race.overall_total}` : ''}` : '—', icon: 'ti-users', color: 'var(--color-primary)', bg: 'var(--color-primary-bg)' },
             { label: 'Gender place', value: race.gender_place ? `${race.gender_place}${race.gender_total ? ` / ${race.gender_total}` : ''}` : '—', icon: 'ti-user', color: '#7c3aed', bg: '#faf5ff' },
-            { label: 'Age group', value: race.age_group_place ? `${race.age_group_place}${race.age_group_total ? ` / ${race.age_group_total}` : ''} ${race.age_group_label || ''}` : '—', icon: 'ti-medal', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+            { label: 'Age group', value: race.age_group_place ? `${race.age_group_place}${race.age_group_total ? ` / ${race.age_group_total}` : ''} ${race.age_group_label || ''}`.trim() : '—', icon: 'ti-medal', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 6, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, fontSize: 15 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 6, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, fontSize: 14, flexShrink: 0 }}>
                   <i className={`ti ${s.icon}`} />
                 </div>
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 500 }}>{s.label}</span>
               </div>
-              <div style={{ fontSize: 18, fontWeight: 600 }}>{s.value}</div>
+              <div style={{ fontSize: 17, fontWeight: 600 }}>{s.value}</div>
             </div>
           ))}
         </div>
@@ -132,10 +133,9 @@ export default function RaceDetailPage() {
           <Section title="Results">
             <Field label="Finish time (chip)" value={fmtTime(race.finish_time_seconds)} mono />
             <Field label="Gun time" value={fmtTime(race.gun_time_seconds)} mono />
-            <Field label="Pace / km" value={race.pace_per_km ? fmtTime(race.pace_per_km_seconds) : null} mono />
             <Field label="Overall" value={race.overall_place ? `${race.overall_place}${race.overall_total ? ` / ${race.overall_total}` : ''}` : null} />
             <Field label="Gender" value={race.gender_place ? `${race.gender_place}${race.gender_total ? ` / ${race.gender_total}` : ''}` : null} />
-            <Field label="Age group" value={race.age_group_place ? `${race.age_group_place}${race.age_group_total ? ` / ${race.age_group_total}` : ''} ${race.age_group_label || ''}` : null} />
+            <Field label="Age group" value={race.age_group_place ? `${race.age_group_place}${race.age_group_total ? ` / ${race.age_group_total}` : ''} ${race.age_group_label || ''}`.trim() : null} />
           </Section>
         )}
 
@@ -153,9 +153,9 @@ export default function RaceDetailPage() {
           <div style={{ marginBottom: 20 }}>
             <div className="form-section-title">Links</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {race.website_url && <a href={race.website_url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ fontSize: 13 }}><i className="ti ti-external-link" /> Race website</a>}
-              {race.results_url && <a href={race.results_url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ fontSize: 13 }}><i className="ti ti-external-link" /> Official results</a>}
-              {race.certificate_url && <a href={race.certificate_url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ fontSize: 13 }}><i className="ti ti-certificate" /> Certificate</a>}
+              {race.website_url && <a href={race.website_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><i className="ti ti-external-link" /> Race website</a>}
+              {race.results_url && <a href={race.results_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><i className="ti ti-external-link" /> Official results</a>}
+              {race.certificate_url && <a href={race.certificate_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><i className="ti ti-certificate" /> Certificate</a>}
             </div>
           </div>
         )}

@@ -103,7 +103,6 @@ input:focus, select:focus, textarea:focus {
 input[type="date"] {
   text-align: left;
   height: 38px;
-  padding: 8 12px;
   line-height: normal;
   box-sizing: border-box;
 }

@@ -30,7 +30,6 @@ export default function ThemeToggle({ compact = false }) {
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center', // 2. Centers content beautifully when buttons expand
               flex: '1 1 65px',         // 3. Shares space evenly, but breaks row if space is under 65px per button
               minWidth: 0,              // 4. Safely avoids flexbox layout breakage
               gap: compact ? 0 : 5,

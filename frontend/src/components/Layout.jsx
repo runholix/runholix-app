@@ -11,8 +11,12 @@ const nav = [
 function SidebarContent({ user, onLogout, onClose }) {
   return (
     <>
-      {/* Logo / close button */}
-      <div style={{ padding: '0 16px 16px', borderBottom: '1px solid var(--color-border)', flexShrink: 0 }}>
+      {/* Logo row */}
+      <div style={{
+        padding: '16px 16px 14px',
+        borderBottom: '1px solid var(--color-border)',
+        flexShrink: 0,
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
@@ -33,7 +37,7 @@ function SidebarContent({ user, onLogout, onClose }) {
         </div>
       </div>
 
-      {/* Nav — scrollable if many items */}
+      {/* Nav links — scrolls if needed */}
       <div className="sidebar-nav">
         {nav.map(({ to, icon, label, exact }) => (
           <NavLink
@@ -54,31 +58,32 @@ function SidebarContent({ user, onLogout, onClose }) {
         ))}
       </div>
 
-      {/* Bottom panel — always visible, never clipped */}
+      {/* Bottom panel — flex-shrink:0 keeps it anchored, never clipped */}
       <div className="sidebar-bottom">
-        {/* Theme switcher */}
-        <div style={{ marginBottom: 14 }}>
+        {/* Theme label + toggle */}
+        <div style={{ marginBottom: 12 }}>
           <div style={{
             fontSize: 11, fontWeight: 600, color: 'var(--color-text-hint)',
-            textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8,
+            textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6,
           }}>
             Appearance
           </div>
-          <ThemeToggle />
+          {/* Always compact=true in sidebar — fills width, icon-only prevents overflow */}
+          <ThemeToggle compact={false} />
         </div>
 
-        {/* User info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        {/* User row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: '50%',
+            width: 30, height: 30, borderRadius: '50%',
             background: 'var(--color-primary-bg)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--color-primary)', fontWeight: 600, fontSize: 13, flexShrink: 0,
+            color: 'var(--color-primary)', fontWeight: 600, fontSize: 12, flexShrink: 0,
           }}>
             {user?.name?.charAt(0).toUpperCase()}
           </div>
           <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {user?.name}
             </div>
             <div style={{ fontSize: 11, color: 'var(--color-text-hint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -87,8 +92,8 @@ function SidebarContent({ user, onLogout, onClose }) {
           </div>
         </div>
 
-        <button onClick={onLogout} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 13 }}>
-          <i className="ti ti-logout" /> Sign out
+        <button onClick={onLogout} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}>
+          <i className="ti ti-logout" style={{ fontSize: 14 }} /> Sign out
         </button>
       </div>
     </>
@@ -112,13 +117,13 @@ export default function Layout() {
       {/* Mobile drawer overlay */}
       <div className={`drawer-overlay${drawerOpen ? ' open' : ''}`} onClick={() => setDrawerOpen(false)} />
 
-      {/* Mobile drawer — same structure as sidebar */}
+      {/* Mobile drawer */}
       <div className={`drawer-sidebar${drawerOpen ? ' open' : ''}`}>
         <SidebarContent user={user} onLogout={handleLogout} onClose={() => setDrawerOpen(false)} />
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {/* Mobile / tablet topbar */}
+        {/* Mobile/tablet topbar */}
         <header className="topbar">
           <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => setDrawerOpen(true)} aria-label="Open menu">
             <i className="ti ti-menu-2" style={{ fontSize: 20 }} />
@@ -134,8 +139,8 @@ export default function Layout() {
             </div>
             <span style={{ fontWeight: 600, fontSize: 14 }}>Race Tracker</span>
           </div>
-          {/* Compact theme toggle in topbar */}
-          <ThemeToggle compact />
+          {/* Compact icon-only toggle in topbar */}
+          <ThemeToggle compact={true} />
           <div style={{
             width: 30, height: 30, borderRadius: '50%',
             background: 'var(--color-primary-bg)',

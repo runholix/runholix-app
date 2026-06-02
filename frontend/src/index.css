@@ -99,17 +99,20 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(96,153,248,0.15);
 }
-/* Fix date input — left-align text, consistent height */
+/* Fix date input — force identical sizing to all other inputs */
 input[type="date"] {
   text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
   height: 38px;
   line-height: normal;
-  box-sizing: border-box;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
 }
 /* Date input calendar icon colour in dark mode */
 [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1) opacity(0.5);
-  margin: 0;
 }
 /* Ensure select option colours are readable */
 select option {
@@ -207,7 +210,7 @@ tbody tr:hover td { background: var(--color-bg); }
   width: var(--sidebar-width); flex-shrink: 0;
   background: var(--color-surface); border-right: 1px solid var(--color-border);
   display: flex; flex-direction: column;
-  padding: 20px 0; position: sticky; top: 0; height: 100vh;
+  position: sticky; top: 0; height: 100vh;
   overflow: hidden;
 }
 .sidebar-nav {
@@ -220,6 +223,7 @@ tbody tr:hover td { background: var(--color-bg); }
   flex-shrink: 0;
   padding: 12px 16px;
   border-top: 1px solid var(--color-border);
+  min-height: 0;
 }
 
 .topbar {
@@ -246,7 +250,6 @@ tbody tr:hover td { background: var(--color-bg); }
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex; flex-direction: column;
-  padding: 20px 0;
   z-index: 201;
   transform: translateX(-100%);
   transition: transform 0.25s ease;

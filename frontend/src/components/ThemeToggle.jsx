@@ -12,12 +12,12 @@ export default function ThemeToggle({ compact = false }) {
   return (
     <div style={{
       display: 'flex',
-      flexWrap: 'wrap', // 1. Allows buttons to drop to a new line when squished
       background: 'var(--color-bg)',
       border: '1px solid var(--color-border)',
       borderRadius: 8,
       padding: 2,
       gap: 2,
+      width: '100%',       /* fill whatever container it's in */
     }}>
       {OPTIONS.map(opt => {
         const active = preference === opt.value;
@@ -28,12 +28,12 @@ export default function ThemeToggle({ compact = false }) {
             title={opt.label}
             aria-label={opt.label}
             style={{
+              flex: 1,           /* equal thirds — prevents overflow */
               display: 'flex',
               alignItems: 'center',
-              flex: '1 1 65px',         // 3. Shares space evenly, but breaks row if space is under 65px per button
-              minWidth: 0,              // 4. Safely avoids flexbox layout breakage
-              gap: compact ? 0 : 5,
-              padding: compact ? '5px 8px' : '5px 10px',
+              justifyContent: 'center',
+              gap: compact ? 0 : 4,
+              padding: '5px 4px',
               borderRadius: 6,
               border: 'none',
               background: active ? 'var(--color-surface)' : 'transparent',
@@ -44,10 +44,19 @@ export default function ThemeToggle({ compact = false }) {
               boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
               transition: 'all 0.15s',
               whiteSpace: 'nowrap',
+              overflow: 'hidden',
             }}
           >
-            <i className={`ti ${opt.icon}`} style={{ fontSize: 14 }} />
-            {!compact && <span>{opt.label}</span>}
+            <i className={`ti ${opt.icon}`} style={{ fontSize: 14, flexShrink: 0 }} />
+            {!compact && (
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: 36,   /* clamp label before it causes overflow */
+              }}>
+                {opt.label}
+              </span>
+            )}
           </button>
         );
       })}

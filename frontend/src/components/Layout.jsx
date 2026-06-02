@@ -11,11 +11,16 @@ const nav = [
 function SidebarContent({ user, onLogout, onClose }) {
   return (
     <>
-      {/* Logo / close */}
-      <div style={{ padding: '0 16px 16px', borderBottom: '1px solid var(--color-border)' }}>
+      {/* Logo / close button */}
+      <div style={{ padding: '0 16px 16px', borderBottom: '1px solid var(--color-border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 16 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'var(--color-primary)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontSize: 16, flexShrink: 0,
+            }}>
               <i className="ti ti-run" />
             </div>
             <span style={{ fontWeight: 600, fontSize: 15 }}>Race Tracker</span>
@@ -28,8 +33,8 @@ function SidebarContent({ user, onLogout, onClose }) {
         </div>
       </div>
 
-      {/* Nav links */}
-      <nav style={{ flex: 1, padding: '12px 10px' }}>
+      {/* Nav — scrollable if many items */}
+      <div className="sidebar-nav">
         {nav.map(({ to, icon, label, exact }) => (
           <NavLink
             key={to} to={to} end={exact}
@@ -47,28 +52,41 @@ function SidebarContent({ user, onLogout, onClose }) {
             {label}
           </NavLink>
         ))}
-      </nav>
+      </div>
 
-      {/* Theme toggle + user */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--color-border)' }}>
+      {/* Bottom panel — always visible, never clipped */}
+      <div className="sidebar-bottom">
         {/* Theme switcher */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, color: 'var(--color-text-hint)',
+            textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8,
+          }}>
             Appearance
           </div>
           <ThemeToggle />
         </div>
 
-        {/* User row */}
+        {/* User info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: 'var(--color-primary-bg)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--color-primary)', fontWeight: 600, fontSize: 13, flexShrink: 0,
+          }}>
             {user?.name?.charAt(0).toUpperCase()}
           </div>
-          <div style={{ overflow: 'hidden', flex: 1 }}>
-            <div style={{ fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
-            <div style={{ fontSize: 11, color: 'var(--color-text-hint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.email}</div>
+          <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {user?.name}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-hint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {user?.email}
+            </div>
           </div>
         </div>
+
         <button onClick={onLogout} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 13 }}>
           <i className="ti ti-logout" /> Sign out
         </button>
@@ -94,7 +112,7 @@ export default function Layout() {
       {/* Mobile drawer overlay */}
       <div className={`drawer-overlay${drawerOpen ? ' open' : ''}`} onClick={() => setDrawerOpen(false)} />
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — same structure as sidebar */}
       <div className={`drawer-sidebar${drawerOpen ? ' open' : ''}`}>
         <SidebarContent user={user} onLogout={handleLogout} onClose={() => setDrawerOpen(false)} />
       </div>
@@ -106,14 +124,24 @@ export default function Layout() {
             <i className="ti ti-menu-2" style={{ fontSize: 20 }} />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 14 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 6,
+              background: 'var(--color-primary)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontSize: 14,
+            }}>
               <i className="ti ti-run" />
             </div>
             <span style={{ fontWeight: 600, fontSize: 14 }}>Race Tracker</span>
           </div>
           {/* Compact theme toggle in topbar */}
           <ThemeToggle compact />
-          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--color-primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: '50%',
+            background: 'var(--color-primary-bg)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--color-primary)', fontWeight: 600, fontSize: 13, flexShrink: 0,
+          }}>
             {user?.name?.charAt(0).toUpperCase()}
           </div>
         </header>

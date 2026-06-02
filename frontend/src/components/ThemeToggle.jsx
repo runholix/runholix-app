@@ -12,6 +12,7 @@ export default function ThemeToggle({ compact = false }) {
   return (
     <div style={{
       display: 'flex',
+      flexWrap: 'wrap', // 1. Allows buttons to drop to a new line when squished
       background: 'var(--color-bg)',
       border: '1px solid var(--color-border)',
       borderRadius: 8,
@@ -29,6 +30,9 @@ export default function ThemeToggle({ compact = false }) {
             style={{
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center', // 2. Centers content beautifully when buttons expand
+              flex: '1 1 65px',         // 3. Shares space evenly, but breaks row if space is under 65px per button
+              minWidth: 0,              // 4. Safely avoids flexbox layout breakage
               gap: compact ? 0 : 5,
               padding: compact ? '5px 8px' : '5px 10px',
               borderRadius: 6,

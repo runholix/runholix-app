@@ -95,10 +95,15 @@ export default function RaceFormPage() {
 
           {/* Event info */}
           <div className="form-section-title" style={{ marginTop: 0 }}>Event info</div>
-          <div className="grid-form-2" style={{ marginBottom: 16 }}>
-            <Field label="Event name *" className="span-2">
-              <input value={form.event_name} onChange={set('event_name')} placeholder="e.g. Jakarta Marathon 2024" required />
-            </Field>
+
+          {/* Event name - full width */}
+          <div className="form-group" style={{ marginBottom: 14 }}>
+            <label className="form-label">Event name *</label>
+            <input value={form.event_name} onChange={set('event_name')} placeholder="e.g. Jakarta Marathon 2024" required />
+          </div>
+
+          {/* Date + Status side by side */}
+          <div className="grid-form-2" style={{ marginBottom: 14 }}>
             <Field label="Race date *">
               <input type="date" value={form.race_date} onChange={set('race_date')} required />
             </Field>
@@ -111,6 +116,10 @@ export default function RaceFormPage() {
                 <option value="dns">DNS</option>
               </select>
             </Field>
+          </div>
+
+          {/* Location fields */}
+          <div className="grid-form-2" style={{ marginBottom: 16 }}>
             <Field label="City">
               <input value={form.city} onChange={set('city')} placeholder="Jakarta" />
             </Field>

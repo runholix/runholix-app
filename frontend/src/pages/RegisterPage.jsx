@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -23,18 +24,17 @@ export default function RegisterPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)', padding: 16 }}>
+      <div style={{ position: 'absolute', top: 16, right: 16 }}>
+        <ThemeToggle />
+      </div>
       <div className="card" style={{ width: '100%', maxWidth: 380 }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 4 }}>Create account</div>
           <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Start tracking your running races</div>
         </div>
 
-        {error && (
-          <div style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '10px 12px', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
-            {error}
-          </div>
-        )}
+        {error && <div className="alert-error">{error}</div>}
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group">

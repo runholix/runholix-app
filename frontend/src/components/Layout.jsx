@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import ThemeToggle from './ThemeToggle.jsx';
 
 const nav = [
   { to: '/', icon: 'ti-layout-dashboard', label: 'Dashboard', exact: true },
@@ -10,7 +11,8 @@ const nav = [
 function SidebarContent({ user, onLogout, onClose }) {
   return (
     <>
-      <div style={{ padding: '0 20px 20px', borderBottom: '1px solid var(--color-border)' }}>
+      {/* Logo / close */}
+      <div style={{ padding: '0 16px 16px', borderBottom: '1px solid var(--color-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 16 }}>
@@ -26,6 +28,7 @@ function SidebarContent({ user, onLogout, onClose }) {
         </div>
       </div>
 
+      {/* Nav links */}
       <nav style={{ flex: 1, padding: '12px 10px' }}>
         {nav.map(({ to, icon, label, exact }) => (
           <NavLink
@@ -46,12 +49,22 @@ function SidebarContent({ user, onLogout, onClose }) {
         ))}
       </nav>
 
-      <div style={{ padding: '12px 20px', borderTop: '1px solid var(--color-border)' }}>
+      {/* Theme toggle + user */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--color-border)' }}>
+        {/* Theme switcher */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-hint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            Appearance
+          </div>
+          <ThemeToggle />
+        </div>
+
+        {/* User row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
             {user?.name?.charAt(0).toUpperCase()}
           </div>
-          <div style={{ overflow: 'hidden' }}>
+          <div style={{ overflow: 'hidden', flex: 1 }}>
             <div style={{ fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-hint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.email}</div>
           </div>
@@ -98,7 +111,9 @@ export default function Layout() {
             </div>
             <span style={{ fontWeight: 600, fontSize: 14 }}>Race Tracker</span>
           </div>
-          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--color-primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)', fontWeight: 600, fontSize: 13 }}>
+          {/* Compact theme toggle in topbar */}
+          <ThemeToggle compact />
+          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--color-primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
             {user?.name?.charAt(0).toUpperCase()}
           </div>
         </header>

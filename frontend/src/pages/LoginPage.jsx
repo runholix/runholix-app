@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -23,7 +24,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)', padding: 16 }}>
+      <div style={{ position: 'absolute', top: 16, right: 16 }}>
+        <ThemeToggle />
+      </div>
       <div className="card" style={{ width: '100%', maxWidth: 380 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18 }}>
@@ -35,11 +39,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {error && (
-          <div style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '10px 12px', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
-            {error}
-          </div>
-        )}
+        {error && <div className="alert-error">{error}</div>}
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group">

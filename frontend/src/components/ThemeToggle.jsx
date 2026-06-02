@@ -17,7 +17,7 @@ export default function ThemeToggle({ compact = false }) {
       borderRadius: 8,
       padding: 2,
       gap: 2,
-      width: '100%',       /* fill whatever container it's in */
+      width: compact ? 'auto' : '100%',
     }}>
       {OPTIONS.map(opt => {
         const active = preference === opt.value;
@@ -28,12 +28,12 @@ export default function ThemeToggle({ compact = false }) {
             title={opt.label}
             aria-label={opt.label}
             style={{
-              flex: 1,           /* equal thirds — prevents overflow */
+              flex: compact ? '0 0 auto' : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: compact ? 0 : 4,
-              padding: '5px 4px',
+              padding: compact ? '5px 7px' : '5px 4px',
               borderRadius: 6,
               border: 'none',
               background: active ? 'var(--color-surface)' : 'transparent',

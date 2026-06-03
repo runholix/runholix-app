@@ -18,13 +18,13 @@ const STATUS_META = {
   dns: { label: 'DNS', cls: 'badge-dns' },
 };
 
-function PdfViewer({ userId, filePath, fileName }) {
+function PdfViewer({ userId, filePath, fileName, label = 'Attachment' }) {
   const [open, setOpen] = useState(false);
   if (!filePath || !fileName) return null;
   const url = api.attachmentUrl(userId, filePath.split('/').pop());
   return (
     <div style={{ marginBottom: 24 }}>
-      <div className="form-section-title">Attachment</div>
+      <div className="form-section-title">{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginBottom: open ? 8 : 0 }}>
         <i className="ti ti-file-type-pdf" style={{ color: 'var(--color-danger)', fontSize: 18 }} />
         <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</span>
@@ -182,6 +182,101 @@ export default function RaceDetailPage() {
           <Field label="Distance" value={race.distance_label || (race.distance_km ? `${parseFloat(race.distance_km).toFixed(2)} km` : null)} />
           <Field label="Race type" value={race.race_type} />
         </Section>
+
+        {/* ── FACILITY ──────────────────────────────────────────────── */}
+        {Array.isArray(race.facilities) && race.facilities.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div className="form-section-title">Facility</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {race.facilities.map(item => {
+                const iconMap = {
+                  'Finisher medal': 'ti-medal',
+                  'BIB timing chip': 'ti-cpu',
+                  'Race jersey': 'ti-shirt',
+                  'Finisher certificate': 'ti-certificate',
+                  'Finisher jersey': 'ti-shirt-filled',
+                  'Finisher cap': 'ti-hat',
+                };
+                const icon = iconMap[item.name] || 'ti-check';
+                return (
+                  <div key={item.name} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7,
+                    padding: '6px 12px', borderRadius: 99,
+                    background: 'var(--color-success-bg)',
+                    border: '1px solid var(--color-success)',
+                    color: 'var(--color-success)',
+                    fontSize: 13, fontWeight: 500,
+                  }}>
+                    <i className={`ti ${icon}`} style={{ fontSize: 15 }} />
+                    {item.name}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── RACE PACK COLLECTION ──────────────────────────────────── */}
+        {(race.rpc_date_start || race.rpc_time || race.rpc_location || race.rpc_notes || race.rpc_attachment_path) && (
+          <div style={{ marginBottom: 24 }}>
+            <div className="form-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Race Pack Collection</span>
+              <span style={{
+                padding: '2px 10px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+                background: race.rpc_status === 'collected' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                color: race.rpc_status === 'collected' ? 'var(--color-success)' : 'var(--color-warning)',
+                border: `1px solid ${race.rpc_status === 'collected' ? 'var(--color-success)' : 'var(--color-warning)'}`,
+              }}>
+                {race.rpc_status === 'collected' ? '✓ Collected' : 'Not collected'}
+              </span>
+            </div>
+
+            <div className="detail-fields" style={{ marginBottom: 16 }}>
+              {race.rpc_date_start && (
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 3 }}>Collection dates</div>
+                  <div style={{ fontWeight: 500, fontSize: 14 }}>
+                    {format(parseISO(race.rpc_date_start), 'dd MMM yyyy')}
+                    {race.rpc_date_end && race.rpc_date_end !== race.rpc_date_start
+                      ? ` – ${format(parseISO(race.rpc_date_end), 'dd MMM yyyy')}`
+                      : ''}
+                  </div>
+                </div>
+              )}
+              {race.rpc_time && (
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 3 }}>Time</div>
+                  <div style={{ fontWeight: 500, fontSize: 14 }}>{race.rpc_time}</div>
+                </div>
+              )}
+              {race.rpc_location && (
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 3 }}>Location</div>
+                  <div style={{ fontWeight: 500, fontSize: 14 }}>{race.rpc_location}</div>
+                </div>
+              )}
+            </div>
+
+            {/* RPC PDF attachment */}
+            {race.rpc_attachment_path && race.rpc_attachment_name && (
+              <div style={{ marginBottom: 12 }}>
+                <PdfViewer
+                  userId={user?.id}
+                  filePath={race.rpc_attachment_path}
+                  fileName={race.rpc_attachment_name}
+                  label="RPC Attachment"
+                />
+              </div>
+            )}
+
+            {race.rpc_notes && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 4 }}>Notes</div>
+                <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap' }}>{race.rpc_notes}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {race.status === 'completed' && (
           <Section title="Results">

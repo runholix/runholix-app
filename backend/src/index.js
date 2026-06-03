@@ -84,6 +84,19 @@ async function startWithMigration() {
         elevation_gain_m INTEGER,
         weather_temp_c NUMERIC(4,1), weather_condition TEXT,
 
+        -- Facility
+        facilities JSONB NOT NULL DEFAULT '[]',
+
+        -- Race Pack Collection
+        rpc_date_start    DATE,
+        rpc_date_end      DATE,
+        rpc_time          TEXT,
+        rpc_location      TEXT,
+        rpc_status        TEXT NOT NULL DEFAULT 'not_collected',
+        rpc_attachment_path TEXT,
+        rpc_attachment_name TEXT,
+        rpc_notes         TEXT,
+
         -- Notes
         notes TEXT, race_report TEXT,
         results_url TEXT, certificate_url TEXT,
@@ -102,8 +115,18 @@ async function startWithMigration() {
       ALTER TABLE races ADD COLUMN IF NOT EXISTS registered_email   TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS registered_phone   TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS finish_time_target TEXT;
-      ALTER TABLE races ADD COLUMN IF NOT EXISTS attachment_path    TEXT;
-      ALTER TABLE races ADD COLUMN IF NOT EXISTS attachment_name    TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS attachment_path      TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS attachment_name      TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS facilities            JSONB DEFAULT '[]';
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_date_start       DATE;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_date_end         DATE;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_time             TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_location         TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_status           TEXT DEFAULT 'not_collected';
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_attachment_path  TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_attachment_name  TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_notes            TEXT;
+      UPDATE races SET facilities = '[]' WHERE facilities IS NULL;
 
       CREATE INDEX IF NOT EXISTS idx_races_user_id  ON races(user_id);
       CREATE INDEX IF NOT EXISTS idx_races_race_date ON races(race_date DESC);

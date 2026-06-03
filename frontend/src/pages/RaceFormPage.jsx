@@ -18,6 +18,11 @@ const EMPTY = {
   heart_rate_avg: '', heart_rate_max: '', elevation_gain_m: '',
   weather_temp_c: '', weather_condition: '',
   notes: '', race_report: '', results_url: '', certificate_url: '',
+  facilities: [],
+  rpc_date_start: '', rpc_date_end: '', rpc_time: '', rpc_location: '',
+  rpc_status: 'not_collected',
+  rpc_attachment_path: '', rpc_attachment_name: '',
+  rpc_notes: '',
 };
 
 function Field({ label, children, hint }) {
@@ -140,6 +145,99 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
   );
 }
 
+// ── Facility section ─────────────────────────────────────────────────────
+const DEFAULT_FACILITIES = [
+  'Finisher medal',
+  'BIB timing chip',
+  'Race jersey',
+  'Finisher certificate',
+  'Finisher jersey',
+  'Finisher cap',
+];
+
+function FacilitySection({ facilities, onChange }) {
+  const [customInput, setCustomInput] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const toggle = (name) => {
+    const exists = facilities.find(f => f.name === name);
+    if (exists) {
+      onChange(facilities.filter(f => f.name !== name));
+    } else {
+      onChange([...facilities, { name, custom: false }]);
+    }
+  };
+
+  const addCustom = () => {
+    const trimmed = customInput.trim();
+    if (!trimmed) return;
+    if (facilities.find(f => f.name === trimmed)) return;
+    onChange([...facilities, { name: trimmed, custom: true }]);
+    setCustomInput('');
+    setShowCustomInput(false);
+  };
+
+  const removeCustom = (name) => onChange(facilities.filter(f => f.name !== name));
+
+  const isChecked = (name) => !!facilities.find(f => f.name === name);
+  const customItems = facilities.filter(f => f.custom);
+
+  return (
+    <>
+      <div className="form-section-title">Facility</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px 16px', marginBottom: 14 }}>
+        {DEFAULT_FACILITIES.map(name => (
+          <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 10px', borderRadius: 'var(--radius)', border: `1px solid ${isChecked(name) ? 'var(--color-primary)' : 'var(--color-border)'}`, background: isChecked(name) ? 'var(--color-primary-bg)' : 'var(--color-surface)', transition: 'all 0.15s' }}>
+            <input
+              type="checkbox"
+              checked={isChecked(name)}
+              onChange={() => toggle(name)}
+              style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', flexShrink: 0 }}
+            />
+            <span style={{ fontSize: 13, fontWeight: isChecked(name) ? 500 : 400, color: isChecked(name) ? 'var(--color-primary)' : 'var(--color-text)' }}>{name}</span>
+          </label>
+        ))}
+
+        {/* Custom items */}
+        {customItems.map(item => (
+          <label key={item.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-bg)', transition: 'all 0.15s' }}>
+            <input
+              type="checkbox"
+              checked={true}
+              onChange={() => removeCustom(item.name)}
+              style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', flexShrink: 0 }}
+            />
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-primary)', flex: 1 }}>{item.name}</span>
+            <button type="button" onClick={() => removeCustom(item.name)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-text-muted)', lineHeight: 1 }}>
+              <i className="ti ti-x" style={{ fontSize: 12 }} />
+            </button>
+          </label>
+        ))}
+      </div>
+
+      {/* Add custom item */}
+      {showCustomInput ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <input
+            value={customInput}
+            onChange={e => setCustomInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } if (e.key === 'Escape') setShowCustomInput(false); }}
+            placeholder="Custom facility name…"
+            autoFocus
+            style={{ flex: 1 }}
+          />
+          <button type="button" className="btn btn-primary btn-sm" onClick={addCustom}>Add</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowCustomInput(false); setCustomInput(''); }}>Cancel</button>
+        </div>
+      ) : (
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowCustomInput(true)} style={{ marginBottom: 8 }}>
+          <i className="ti ti-plus" /> Add custom item
+        </button>
+      )}
+    </>
+  );
+}
+
 // ── Main form ─────────────────────────────────────────────────────────────
 export default function RaceFormPage() {
   const { id } = useParams();
@@ -179,6 +277,14 @@ export default function RaceFormPage() {
         weather_temp_c: race.weather_temp_c || '', weather_condition: race.weather_condition || '',
         notes: race.notes || '', race_report: race.race_report || '',
         results_url: race.results_url || '', certificate_url: race.certificate_url || '',
+        facilities: Array.isArray(race.facilities) ? race.facilities : [],
+        rpc_date_start: race.rpc_date_start?.slice(0,10) || '',
+        rpc_date_end: race.rpc_date_end?.slice(0,10) || '',
+        rpc_time: race.rpc_time || '', rpc_location: race.rpc_location || '',
+        rpc_status: race.rpc_status || 'not_collected',
+        rpc_attachment_path: race.rpc_attachment_path || '',
+        rpc_attachment_name: race.rpc_attachment_name || '',
+        rpc_notes: race.rpc_notes || '',
       });
     }).finally(() => setLoading(false));
   }, [id]);
@@ -373,6 +479,65 @@ export default function RaceFormPage() {
               <input value={form.category} onChange={set('category')} placeholder="Open Male" />
             </Field>
           </div>
+
+          {/* ── FACILITY ────────────────────────────────────────────── */}
+          <FacilitySection
+            facilities={form.facilities}
+            onChange={facs => setVal('facilities', facs)}
+          />
+
+          {/* ── RACE PACK COLLECTION ────────────────────────────────── */}
+          <div className="form-section-title">Race Pack Collection</div>
+
+          {/* Date range */}
+          <div className="grid-form-2" style={{ marginBottom: 14 }}>
+            <Field label="Collection date start">
+              <input type="date" value={form.rpc_date_start} onChange={set('rpc_date_start')} />
+            </Field>
+            <Field label="Collection date end">
+              <input type="date" value={form.rpc_date_end} onChange={set('rpc_date_end')} />
+            </Field>
+          </div>
+
+          {/* Time + Location + Status */}
+          <div className="grid-form-3" style={{ marginBottom: 14 }}>
+            <Field label="Collection time" hint="e.g. 09:00–17:00 or Morning only">
+              <input value={form.rpc_time} onChange={set('rpc_time')} placeholder="09:00 – 17:00" />
+            </Field>
+            <Field label="Location">
+              <input value={form.rpc_location} onChange={set('rpc_location')} placeholder="Hall A, Expo Center" />
+            </Field>
+            <Field label="Collection status">
+              <select value={form.rpc_status} onChange={set('rpc_status')}>
+                <option value="not_collected">Not collected</option>
+                <option value="collected">Collected</option>
+              </select>
+            </Field>
+          </div>
+
+          {/* RPC Attachment */}
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Attachment (optional — PDF)">
+              <PdfUploader
+                filePath={form.rpc_attachment_path}
+                fileName={form.rpc_attachment_name}
+                userId={userId}
+                onChange={(path, name) => { setVal('rpc_attachment_path', path); setVal('rpc_attachment_name', name); }}
+                onClear={() => { setVal('rpc_attachment_path', ''); setVal('rpc_attachment_name', ''); }}
+              />
+            </Field>
+          </div>
+
+          {/* RPC Notes */}
+          <Field label="Notes">
+            <textarea
+              value={form.rpc_notes}
+              onChange={set('rpc_notes')}
+              rows={3}
+              placeholder="Collection instructions, what to bring, parking info…"
+              style={{ resize: 'vertical' }}
+            />
+          </Field>
 
           {/* ── RESULTS ─────────────────────────────────────────────── */}
           {showResults && (<>

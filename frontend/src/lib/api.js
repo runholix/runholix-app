@@ -52,10 +52,15 @@ export const api = {
   routeFileUrl: (userId, filename, name) =>
     `${BASE}/upload/route-file/${userId}/${encodeURIComponent(filename)}?name=${encodeURIComponent(name)}&token=${getToken()}`,
 
-  // File uploads — PDF attachments
+  // File uploads — PDF attachments (registration)
   uploadAttachment: (file) => uploadFile('/upload/attachment', file),
   deleteAttachment: (userId, filename) =>
     request(`/upload/attachment/${userId}/${filename}`, { method: 'DELETE' }),
   attachmentUrl: (userId, filename) =>
+    `${BASE}/upload/attachment/${userId}/${encodeURIComponent(filename)}?token=${getToken()}`,
+
+  // File uploads — PDF attachments (race pack collection — same endpoint, different form field)
+  uploadRpcAttachment: (file) => uploadFile('/upload/attachment', file),
+  rpcAttachmentUrl: (userId, filename) =>
     `${BASE}/upload/attachment/${userId}/${encodeURIComponent(filename)}?token=${getToken()}`,
 };

@@ -13,6 +13,11 @@ function num(v) {
 function str(v) {
   return (v === '' || v === undefined) ? null : v;
 }
+function jsonArr(v) {
+  if (!v) return '[]';
+  if (typeof v === 'string') return v;
+  return JSON.stringify(v);
+}
 function formatSeconds(s) {
   if (!s) return null;
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -31,6 +36,7 @@ function mapRace(row) {
     finish_time: formatSeconds(row.finish_time_seconds),
     gun_time: formatSeconds(row.gun_time_seconds),
     pace_per_km: formatSeconds(row.pace_per_km_seconds),
+    facilities: Array.isArray(row.facilities) ? row.facilities : [],
   };
 }
 
@@ -102,12 +108,15 @@ router.post('/', async (req, res) => {
         age_group_place, age_group_total, age_group_label,
         heart_rate_avg, heart_rate_max, elevation_gain_m,
         weather_temp_c, weather_condition, notes, race_report,
-        results_url, certificate_url
+        results_url, certificate_url, facilities,
+        rpc_date_start, rpc_date_end, rpc_time, rpc_location, rpc_status,
+        rpc_attachment_path, rpc_attachment_name, rpc_notes
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
         $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
-        $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43
+        $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,
+        $45,$46,$47,$48,$49,$50,$51,$52
       ) RETURNING *`,
       [
         req.userId, b.event_name, b.race_date,
@@ -128,6 +137,11 @@ router.post('/', async (req, res) => {
         num(b.heart_rate_avg), num(b.heart_rate_max), num(b.elevation_gain_m),
         num(b.weather_temp_c), str(b.weather_condition),
         str(b.notes), str(b.race_report), str(b.results_url), str(b.certificate_url),
+        jsonArr(b.facilities),
+        str(b.rpc_date_start), str(b.rpc_date_end),
+        str(b.rpc_time), str(b.rpc_location),
+        b.rpc_status || 'not_collected',
+        str(b.rpc_attachment_path), str(b.rpc_attachment_name), str(b.rpc_notes),
       ]
     );
     res.status(201).json(mapRace(rows[0]));
@@ -155,8 +169,11 @@ router.put('/:id', async (req, res) => {
         age_group_place=$33, age_group_total=$34, age_group_label=$35,
         heart_rate_avg=$36, heart_rate_max=$37, elevation_gain_m=$38,
         weather_temp_c=$39, weather_condition=$40, notes=$41, race_report=$42,
-        results_url=$43, certificate_url=$44, updated_at=NOW()
-      WHERE id=$45 AND user_id=$46 RETURNING *`,
+        results_url=$43, certificate_url=$44, facilities=$45,
+        rpc_date_start=$46, rpc_date_end=$47, rpc_time=$48, rpc_location=$49, rpc_status=$50,
+        rpc_attachment_path=$51, rpc_attachment_name=$52, rpc_notes=$53,
+        updated_at=NOW()
+      WHERE id=$54 AND user_id=$55 RETURNING *`,
       [
         b.event_name, b.race_date,
         str(b.flag_off_time), b.cutoff_time,
@@ -176,6 +193,11 @@ router.put('/:id', async (req, res) => {
         num(b.heart_rate_avg), num(b.heart_rate_max), num(b.elevation_gain_m),
         num(b.weather_temp_c), str(b.weather_condition),
         str(b.notes), str(b.race_report), str(b.results_url), str(b.certificate_url),
+        jsonArr(b.facilities),
+        str(b.rpc_date_start), str(b.rpc_date_end),
+        str(b.rpc_time), str(b.rpc_location),
+        b.rpc_status || 'not_collected',
+        str(b.rpc_attachment_path), str(b.rpc_attachment_name), str(b.rpc_notes),
         req.params.id, req.userId,
       ]
     );

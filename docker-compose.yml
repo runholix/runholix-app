@@ -29,8 +29,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-racetracker}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-racetracker}
       JWT_SECRET: ${JWT_SECRET:-supersecretchangeme}
       PORT: 3001
-    ports:
-      - "3001:3001"
+      UPLOAD_DIR: /uploads
+    expose:
+      - "3001"
+    volumes:
+      - uploads_data:/uploads
 
   frontend:
     build:
@@ -47,3 +50,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

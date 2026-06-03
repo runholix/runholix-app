@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 
 const EMPTY = {
-  event_name: '', race_date: '', location: '', city: '', country: '', website_url: '',
+  event_name: '', race_date: '', flag_off_time: '', cutoff_time: '',
+  route_file_path: '', route_file_name: '',
+  location: '', city: '', country: '', website_url: '',
   status: 'registered', registration_fee: '', registration_currency: 'USD',
-  bib_number: '', confirmation_number: '',
+  bib_number: '', bib_name: '', jersey_size: '',
+  registered_email: '', registered_phone: '',
+  confirmation_number: '', finish_time_target: '',
+  attachment_path: '', attachment_name: '',
   distance_km: '', distance_label: '', race_type: 'road', category: '',
   finish_time: '', gun_time: '',
   overall_place: '', overall_total: '', gender_place: '', gender_total: '',
@@ -15,33 +20,153 @@ const EMPTY = {
   notes: '', race_report: '', results_url: '', certificate_url: '',
 };
 
-function Field({ label, children, className }) {
+function Field({ label, children, hint }) {
   return (
-    <div className={`form-group${className ? ' ' + className : ''}`}>
+    <div className="form-group">
       <label className="form-label">{label}</label>
       {children}
+      {hint && <span style={{ fontSize: 11, color: 'var(--color-text-hint)', marginTop: 2 }}>{hint}</span>}
     </div>
   );
 }
 
+// ── Route file uploader ───────────────────────────────────────────────────
+function RouteUploader({ filePath, fileName, userId, onChange, onClear }) {
+  const inputRef = useRef();
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setErr(''); setUploading(true);
+    try {
+      const res = await api.uploadRoute(file);
+      onChange(res.route_file_path, res.route_file_name);
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  if (filePath && fileName) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)' }}>
+        <i className="ti ti-file-vector" style={{ color: 'var(--color-primary)', fontSize: 18, flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</span>
+        <a
+          href={api.routeFileUrl(userId, filePath.split('/').pop(), fileName)}
+          download={fileName}
+          className="btn btn-ghost btn-sm"
+          title="Download"
+        >
+          <i className="ti ti-download" />
+        </a>
+        <button type="button" onClick={onClear} className="btn btn-ghost btn-sm" title="Remove">
+          <i className="ti ti-x" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <input ref={inputRef} type="file" accept=".fit,.gpx,.kml" style={{ display: 'none' }} onChange={handleFile} />
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading}>
+        <i className="ti ti-upload" /> {uploading ? 'Uploading…' : 'Upload .fit / .gpx / .kml'}
+      </button>
+      {err && <div style={{ color: 'var(--color-danger)', fontSize: 12, marginTop: 4 }}>{err}</div>}
+    </div>
+  );
+}
+
+// ── PDF attachment uploader ──────────────────────────────────────────────
+function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
+  const inputRef = useRef();
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
+  const [viewing, setViewing] = useState(false);
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setErr(''); setUploading(true);
+    try {
+      const res = await api.uploadAttachment(file);
+      onChange(res.attachment_path, res.attachment_name);
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  if (filePath && fileName) {
+    const url = api.attachmentUrl(userId, filePath.split('/').pop());
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginBottom: viewing ? 8 : 0 }}>
+          <i className="ti ti-file-type-pdf" style={{ color: 'var(--color-danger)', fontSize: 18, flexShrink: 0 }} />
+          <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</span>
+          <button type="button" onClick={() => setViewing(v => !v)} className="btn btn-ghost btn-sm" title={viewing ? 'Hide' : 'View PDF'}>
+            <i className={`ti ${viewing ? 'ti-eye-off' : 'ti-eye'}`} />
+          </button>
+          <button type="button" onClick={onClear} className="btn btn-ghost btn-sm" title="Remove">
+            <i className="ti ti-x" />
+          </button>
+        </div>
+        {viewing && (
+          <iframe
+            src={url}
+            title="Attachment preview"
+            style={{ width: '100%', height: 500, border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', display: 'block' }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <input ref={inputRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleFile} />
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading}>
+        <i className="ti ti-upload" /> {uploading ? 'Uploading…' : 'Upload PDF'}
+      </button>
+      {err && <div style={{ color: 'var(--color-danger)', fontSize: 12, marginTop: 4 }}>{err}</div>}
+    </div>
+  );
+}
+
+// ── Main form ─────────────────────────────────────────────────────────────
 export default function RaceFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = !!id;
   const [form, setForm] = useState(EMPTY);
+  const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    api.me().then(u => setUserId(u.id)).catch(() => {});
     if (!isEdit) return;
     api.getRace(id).then(race => {
       setForm({
         event_name: race.event_name || '', race_date: race.race_date?.slice(0, 10) || '',
+        flag_off_time: race.flag_off_time || '', cutoff_time: race.cutoff_time || '',
+        route_file_path: race.route_file_path || '', route_file_name: race.route_file_name || '',
         location: race.location || '', city: race.city || '', country: race.country || '',
         website_url: race.website_url || '', status: race.status || 'registered',
         registration_fee: race.registration_fee || '', registration_currency: race.registration_currency || 'USD',
-        bib_number: race.bib_number || '', confirmation_number: race.confirmation_number || '',
+        bib_number: race.bib_number || '', bib_name: race.bib_name || '',
+        jersey_size: race.jersey_size || '',
+        registered_email: race.registered_email || '', registered_phone: race.registered_phone || '',
+        confirmation_number: race.confirmation_number || '', finish_time_target: race.finish_time_target || '',
+        attachment_path: race.attachment_path || '', attachment_name: race.attachment_name || '',
         distance_km: race.distance_km || '', distance_label: race.distance_label || '',
         race_type: race.race_type || 'road', category: race.category || '',
         finish_time: race.finish_time || '', gun_time: race.gun_time || '',
@@ -59,6 +184,7 @@ export default function RaceFormPage() {
   }, [id]);
 
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
+  const setVal = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
   const submit = async (e) => {
     e.preventDefault();
@@ -81,28 +207,22 @@ export default function RaceFormPage() {
       <Link to={isEdit ? `/races/${id}` : '/races'} style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
         <i className="ti ti-arrow-left" /> {isEdit ? 'Back to race' : 'Back to races'}
       </Link>
-
       <h1 className="page-title" style={{ marginBottom: 24 }}>{isEdit ? 'Edit race' : 'Add new race'}</h1>
 
-      {error && (
-        <div style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 20 }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="alert-error">{error}</div>}
 
       <form onSubmit={submit}>
         <div className="card">
 
-          {/* Event info */}
+          {/* ── EVENT INFO ──────────────────────────────────────────── */}
           <div className="form-section-title" style={{ marginTop: 0 }}>Event info</div>
 
-          {/* Event name - full width */}
           <div className="form-group" style={{ marginBottom: 14 }}>
             <label className="form-label">Event name *</label>
             <input value={form.event_name} onChange={set('event_name')} placeholder="e.g. Jakarta Marathon 2024" required />
           </div>
 
-          {/* Date + Status side by side */}
+          {/* Date + Status */}
           <div className="grid-form-2" style={{ marginBottom: 14 }}>
             <Field label="Race date *">
               <input type="date" value={form.race_date} onChange={set('race_date')} required />
@@ -118,8 +238,31 @@ export default function RaceFormPage() {
             </Field>
           </div>
 
-          {/* Location fields */}
-          <div className="grid-form-2" style={{ marginBottom: 16 }}>
+          {/* Flag off + Cut off */}
+          <div className="grid-form-2" style={{ marginBottom: 14 }}>
+            <Field label="Flag off time (HH:MM, optional)" hint="24-hour format e.g. 05:30">
+              <input
+                value={form.flag_off_time}
+                onChange={set('flag_off_time')}
+                placeholder="05:30"
+                pattern="^([01]\d|2[0-3]):[0-5]\d$"
+                title="HH:MM in 24-hour format"
+              />
+            </Field>
+            <Field label="Cut off time * (e.g. 7h 30m)" hint="Total race time limit">
+              <input
+                value={form.cutoff_time}
+                onChange={set('cutoff_time')}
+                placeholder="7h 30m"
+                pattern="^\d+h\s*\d+m$"
+                title="Format: Xh Ym (e.g. 7h 30m)"
+                required
+              />
+            </Field>
+          </div>
+
+          {/* Location */}
+          <div className="grid-form-2" style={{ marginBottom: 14 }}>
             <Field label="City">
               <input value={form.city} onChange={set('city')} placeholder="Jakarta" />
             </Field>
@@ -134,15 +277,35 @@ export default function RaceFormPage() {
             </Field>
           </div>
 
-          {/* Registration */}
+          {/* Route file */}
+          <Field label="Route file (optional — .fit / .gpx / .kml)">
+            <RouteUploader
+              filePath={form.route_file_path}
+              fileName={form.route_file_name}
+              userId={userId}
+              onChange={(path, name) => { setVal('route_file_path', path); setVal('route_file_name', name); }}
+              onClear={() => { setVal('route_file_path', ''); setVal('route_file_name', ''); }}
+            />
+          </Field>
+
+          {/* ── REGISTRATION ────────────────────────────────────────── */}
           <div className="form-section-title">Registration</div>
-          <div className="grid-form-4" style={{ marginBottom: 16 }}>
+
+          {/* Row 1: Bib + Name on BIB + Confirmation */}
+          <div className="grid-form-3" style={{ marginBottom: 14 }}>
             <Field label="Bib number">
               <input value={form.bib_number} onChange={set('bib_number')} placeholder="1234" />
+            </Field>
+            <Field label="Name on BIB (optional)">
+              <input value={form.bib_name} onChange={set('bib_name')} placeholder="JOHN DOE" />
             </Field>
             <Field label="Confirmation #">
               <input value={form.confirmation_number} onChange={set('confirmation_number')} />
             </Field>
+          </div>
+
+          {/* Row 2: Fee + Currency + Jersey size */}
+          <div className="grid-form-3" style={{ marginBottom: 14 }}>
             <Field label="Fee">
               <input type="number" value={form.registration_fee} onChange={set('registration_fee')} placeholder="350000" step="0.01" />
             </Field>
@@ -151,9 +314,44 @@ export default function RaceFormPage() {
                 {['IDR','USD','EUR','GBP','SGD','MYR','JPY','AUD'].map(c => <option key={c}>{c}</option>)}
               </select>
             </Field>
+            <Field label="Jersey size (optional)">
+              <select value={form.jersey_size} onChange={set('jersey_size')}>
+                <option value="">—</option>
+                {['XS','S','M','L','XL','XXL','XXXL'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </Field>
           </div>
 
-          {/* Distance */}
+          {/* Row 3: Email + Phone + Finish time target */}
+          <div className="grid-form-3" style={{ marginBottom: 14 }}>
+            <Field label="Registered email *">
+              <input type="email" value={form.registered_email} onChange={set('registered_email')}
+                placeholder="you@example.com" required />
+            </Field>
+            <Field label="Registered phone *">
+              <input type="tel" value={form.registered_phone} onChange={set('registered_phone')}
+                placeholder="+62812345678" required />
+            </Field>
+            <Field label="Finish time target (optional)" hint="HH:MM:SS">
+              <input value={form.finish_time_target} onChange={set('finish_time_target')}
+                placeholder="04:30:00"
+                pattern="^\d{1,2}:\d{2}:\d{2}$"
+                title="HH:MM:SS format e.g. 04:30:00" />
+            </Field>
+          </div>
+
+          {/* Attachment */}
+          <Field label="Attachment (optional — PDF)">
+            <PdfUploader
+              filePath={form.attachment_path}
+              fileName={form.attachment_name}
+              userId={userId}
+              onChange={(path, name) => { setVal('attachment_path', path); setVal('attachment_name', name); }}
+              onClear={() => { setVal('attachment_path', ''); setVal('attachment_name', ''); }}
+            />
+          </Field>
+
+          {/* ── DISTANCE & CATEGORY ─────────────────────────────────── */}
           <div className="form-section-title">Distance & category</div>
           <div className="grid-form-4" style={{ marginBottom: 16 }}>
             <Field label="Distance (km)">
@@ -176,7 +374,7 @@ export default function RaceFormPage() {
             </Field>
           </div>
 
-          {/* Results — only if completed/dnf */}
+          {/* ── RESULTS ─────────────────────────────────────────────── */}
           {showResults && (<>
             <div className="form-section-title">Results</div>
             <div className="grid-form-2" style={{ marginBottom: 16 }}>
@@ -222,7 +420,7 @@ export default function RaceFormPage() {
             </div>
           </>)}
 
-          {/* Notes */}
+          {/* ── NOTES ───────────────────────────────────────────────── */}
           <div className="form-section-title">Notes</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 8 }}>
             <Field label="Quick notes">
@@ -233,7 +431,7 @@ export default function RaceFormPage() {
             </Field>
           </div>
 
-          {/* Actions */}
+          {/* ── ACTIONS ─────────────────────────────────────────────── */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
             <Link to={isEdit ? `/races/${id}` : '/races'} className="btn btn-secondary">Cancel</Link>
             <button type="submit" className="btn btn-primary" disabled={saving}>
@@ -241,6 +439,7 @@ export default function RaceFormPage() {
               {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add race'}
             </button>
           </div>
+
         </div>
       </form>
     </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api.js';
+import { useAuth } from '../hooks/useAuth.jsx';
 
 function fmtTime(sec) {
   if (!sec) return '—';
@@ -16,6 +17,31 @@ const STATUS_META = {
   dnf: { label: 'DNF', cls: 'badge-dnf' },
   dns: { label: 'DNS', cls: 'badge-dns' },
 };
+
+function PdfViewer({ userId, filePath, fileName }) {
+  const [open, setOpen] = useState(false);
+  if (!filePath || !fileName) return null;
+  const url = api.attachmentUrl(userId, filePath.split('/').pop());
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div className="form-section-title">Attachment</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginBottom: open ? 8 : 0 }}>
+        <i className="ti ti-file-type-pdf" style={{ color: 'var(--color-danger)', fontSize: 18 }} />
+        <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</span>
+        <button onClick={() => setOpen(v => !v)} className="btn btn-secondary btn-sm">
+          <i className={`ti ${open ? 'ti-eye-off' : 'ti-eye'}`} /> {open ? 'Hide' : 'View PDF'}
+        </button>
+      </div>
+      {open && (
+        <iframe
+          src={url}
+          title="Attachment"
+          style={{ width: '100%', height: 600, border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', display: 'block' }}
+        />
+      )}
+    </div>
+  );
+}
 
 function Field({ label, value, mono }) {
   if (!value && value !== 0) return null;
@@ -41,6 +67,7 @@ function Section({ title, children }) {
 export default function RaceDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [race, setRace] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -114,19 +141,46 @@ export default function RaceDetailPage() {
       )}
 
       <div className="card">
+        <Section title="Event info">
+          <Field label="Flag off time" value={race.flag_off_time} />
+          <Field label="Cut off time" value={race.cutoff_time} />
+          <Field label="Location" value={race.location} />
+          <Field label="City" value={race.city} />
+          <Field label="Country" value={race.country} />
+        </Section>
+
+        {/* Route file download */}
+        {race.route_file_path && race.route_file_name && (
+          <div style={{ marginBottom: 24 }}>
+            <div className="form-section-title">Route file</div>
+            <a
+              href={api.routeFileUrl(user?.id, race.route_file_path.split('/').pop(), race.route_file_name)}
+              download={race.route_file_name}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex' }}
+            >
+              <i className="ti ti-download" /> {race.route_file_name}
+            </a>
+          </div>
+        )}
+
         <Section title="Registration details">
           <Field label="Bib number" value={race.bib_number} />
+          <Field label="Name on BIB" value={race.bib_name} />
           <Field label="Confirmation #" value={race.confirmation_number} />
           <Field label="Registration fee" value={race.registration_fee ? `${race.registration_fee} ${race.registration_currency || 'USD'}` : null} />
+          <Field label="Jersey size" value={race.jersey_size} />
+          <Field label="Registered email" value={race.registered_email} />
+          <Field label="Registered phone" value={race.registered_phone} />
+          <Field label="Finish time target" value={race.finish_time_target} mono />
           <Field label="Category" value={race.category} />
         </Section>
+
+        <PdfViewer userId={user?.id} filePath={race.attachment_path} fileName={race.attachment_name} />
 
         <Section title="Race details">
           <Field label="Distance" value={race.distance_label || (race.distance_km ? `${parseFloat(race.distance_km).toFixed(2)} km` : null)} />
           <Field label="Race type" value={race.race_type} />
-          <Field label="Location" value={race.location} />
-          <Field label="City" value={race.city} />
-          <Field label="Country" value={race.country} />
         </Section>
 
         {race.status === 'completed' && (

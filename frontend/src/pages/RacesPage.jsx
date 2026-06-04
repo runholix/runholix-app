@@ -33,6 +33,7 @@ function RaceCard({ r }) {
           {r.race_date && <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 3 }} />{format(parseISO(r.race_date), 'dd MMM yyyy')}</span>}
           {(r.city || r.location) && <span><i className="ti ti-map-pin" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.city || r.location}</span>}
           {(r.distance_label || r.distance_km) && <span><i className="ti ti-route" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.distance_label || `${parseFloat(r.distance_km).toFixed(1)} km`}</span>}
+          {r.race_type && <span><i className="ti ti-tag" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.race_type.charAt(0).toUpperCase() + r.race_type.slice(1)}</span>}
         </div>
         {(r.finish_time_seconds || r.bib_number) && (
           <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
@@ -124,7 +125,7 @@ export default function RacesPage() {
                 <table>
                   <thead>
                     <tr>
-                      {['Event', 'Date', 'Distance', 'Bib', 'Finish time', 'Placement', 'Status', ''].map(h => (
+                      {['Event', 'Date', 'Distance', 'Type', 'Bib', 'Finish time', 'Placement', 'Status', ''].map(h => (
                         <th key={h}>{h}</th>
                       ))}
                     </tr>
@@ -142,6 +143,22 @@ export default function RacesPage() {
                           </td>
                           <td style={{ whiteSpace: 'nowrap' }}>{r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'}</td>
                           <td>{r.distance_label || (r.distance_km ? `${parseFloat(r.distance_km).toFixed(1)} km` : '—')}</td>
+                          <td>
+                            {r.race_type ? (
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                borderRadius: 99,
+                                fontSize: 12,
+                                fontWeight: 500,
+                                background: r.race_type === 'trail' ? 'var(--color-warning-bg)' : 'var(--color-bg)',
+                                color: r.race_type === 'trail' ? 'var(--color-warning)' : 'var(--color-text-muted)',
+                                border: `1px solid ${r.race_type === 'trail' ? 'var(--color-warning)' : 'var(--color-border)'}`,
+                              }}>
+                                {r.race_type.charAt(0).toUpperCase() + r.race_type.slice(1)}
+                              </span>
+                            ) : '—'}
+                          </td>
                           <td style={{ color: 'var(--color-text-muted)' }}>{r.bib_number ? `#${r.bib_number}` : '—'}</td>
                           <td style={{ fontWeight: 500 }}>{fmtTime(r.finish_time_seconds) || '—'}</td>
                           <td>{r.overall_place ? `${r.overall_place}${r.overall_total ? `/${r.overall_total}` : ''}` : '—'}</td>

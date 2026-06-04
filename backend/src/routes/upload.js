@@ -99,7 +99,8 @@ router.post('/attachment', requireAuth, pdfUpload.single('file'), (req, res) => 
 });
 
 // ── GET /api/upload/attachment/:userId/:filename ───────────────────────────
-// Serves PDF inline so the browser renders it without downloading
+// Serves PDF inline so the browser renders it without downloading.
+// Pass ?download=1 to force download with original filename.
 router.get('/attachment/:userId/:filename', (req, res, next) => {
   if (req.query.token && !req.headers.authorization) {
     req.headers.authorization = 'Bearer ' + req.query.token;
@@ -110,7 +111,12 @@ router.get('/attachment/:userId/:filename', (req, res, next) => {
   const filePath = path.join(UPLOAD_DIR, req.params.userId, req.params.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', 'inline');
+  if (req.query.download === '1') {
+    const name = req.query.name || req.params.filename;
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  } else {
+    res.setHeader('Content-Disposition', 'inline');
+  }
   res.sendFile(path.resolve(filePath));
 });
 

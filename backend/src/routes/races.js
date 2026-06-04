@@ -37,6 +37,7 @@ function mapRace(row) {
     gun_time: formatSeconds(row.gun_time_seconds),
     pace_per_km: formatSeconds(row.pace_per_km_seconds),
     facilities: Array.isArray(row.facilities) ? row.facilities : [],
+    mandatory_items: Array.isArray(row.mandatory_items) ? row.mandatory_items : [],
   };
 }
 
@@ -69,9 +70,11 @@ router.get('/stats', async (req, res) => {
         COUNT(*) FILTER (WHERE status='completed') AS total_completed,
         COUNT(*) FILTER (WHERE status IN ('registered','upcoming')) AS upcoming_count,
         COALESCE(SUM(distance_km) FILTER (WHERE status='completed'),0) AS total_distance_km,
-        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 9.9 AND 10.2)   AS best_10k,
-        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 20.9 AND 21.2)  AS best_half,
-        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 41.9 AND 42.3)  AS best_marathon
+        COALESCE(SUM(elevation_gain_m) FILTER (WHERE status='completed'),0) AS total_elevation_m,
+        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 4.9 AND 5.2)   AS best_5k,
+        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 9.9 AND 10.2)  AS best_10k,
+        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 20.9 AND 21.2) AS best_half,
+        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 41.9 AND 42.3) AS best_marathon
       FROM races WHERE user_id = $1`, [req.userId]);
     res.json(rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
@@ -103,6 +106,8 @@ router.post('/', async (req, res) => {
         confirmation_number, finish_time_target,
         attachment_path, attachment_name,
         distance_km, distance_label, race_type, category,
+        elevation_gain_req_m, itra_point,
+        itra_url, qualification,
         finish_time_seconds, gun_time_seconds,
         overall_place, overall_total, gender_place, gender_total,
         age_group_place, age_group_total, age_group_label,
@@ -110,13 +115,15 @@ router.post('/', async (req, res) => {
         weather_temp_c, weather_condition, notes, race_report,
         results_url, certificate_url, facilities,
         rpc_date_start, rpc_date_end, rpc_time, rpc_location, rpc_status,
-        rpc_attachment_path, rpc_attachment_name, rpc_notes
+        rpc_attachment_path, rpc_attachment_name, rpc_notes,
+        mandatory_items,
+        strava_url, result_file_path, result_file_name
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-        $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
-        $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,
-        $45,$46,$47,$48,$49,$50,$51,$52
+        $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,
+        $35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,
+        $49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59
       ) RETURNING *`,
       [
         req.userId, b.event_name, b.race_date,
@@ -130,6 +137,8 @@ router.post('/', async (req, res) => {
         str(b.confirmation_number), str(b.finish_time_target),
         str(b.attachment_path), str(b.attachment_name),
         num(b.distance_km), str(b.distance_label), str(b.race_type), str(b.category),
+        num(b.elevation_gain_req_m), num(b.itra_point),
+        str(b.itra_url), str(b.qualification),
         parseTimeToSeconds(b.finish_time), parseTimeToSeconds(b.gun_time),
         num(b.overall_place), num(b.overall_total),
         num(b.gender_place), num(b.gender_total),
@@ -142,6 +151,8 @@ router.post('/', async (req, res) => {
         str(b.rpc_time), str(b.rpc_location),
         b.rpc_status || 'not_collected',
         str(b.rpc_attachment_path), str(b.rpc_attachment_name), str(b.rpc_notes),
+        jsonArr(b.mandatory_items),
+        str(b.strava_url), str(b.result_file_path), str(b.result_file_name),
       ]
     );
     res.status(201).json(mapRace(rows[0]));
@@ -164,16 +175,20 @@ router.put('/:id', async (req, res) => {
         confirmation_number=$19, finish_time_target=$20,
         attachment_path=$21, attachment_name=$22,
         distance_km=$23, distance_label=$24, race_type=$25, category=$26,
-        finish_time_seconds=$27, gun_time_seconds=$28,
-        overall_place=$29, overall_total=$30, gender_place=$31, gender_total=$32,
-        age_group_place=$33, age_group_total=$34, age_group_label=$35,
-        heart_rate_avg=$36, heart_rate_max=$37, elevation_gain_m=$38,
-        weather_temp_c=$39, weather_condition=$40, notes=$41, race_report=$42,
-        results_url=$43, certificate_url=$44, facilities=$45,
-        rpc_date_start=$46, rpc_date_end=$47, rpc_time=$48, rpc_location=$49, rpc_status=$50,
-        rpc_attachment_path=$51, rpc_attachment_name=$52, rpc_notes=$53,
+        elevation_gain_req_m=$27, itra_point=$28,
+        itra_url=$29, qualification=$30,
+        finish_time_seconds=$31, gun_time_seconds=$32,
+        overall_place=$33, overall_total=$34, gender_place=$35, gender_total=$36,
+        age_group_place=$37, age_group_total=$38, age_group_label=$39,
+        heart_rate_avg=$40, heart_rate_max=$41, elevation_gain_m=$42,
+        weather_temp_c=$43, weather_condition=$44, notes=$45, race_report=$46,
+        results_url=$47, certificate_url=$48, facilities=$49,
+        rpc_date_start=$50, rpc_date_end=$51, rpc_time=$52, rpc_location=$53, rpc_status=$54,
+        rpc_attachment_path=$55, rpc_attachment_name=$56, rpc_notes=$57,
+        mandatory_items=$58,
+        strava_url=$59, result_file_path=$60, result_file_name=$61,
         updated_at=NOW()
-      WHERE id=$54 AND user_id=$55 RETURNING *`,
+      WHERE id=$62 AND user_id=$63 RETURNING *`,
       [
         b.event_name, b.race_date,
         str(b.flag_off_time), b.cutoff_time,
@@ -186,6 +201,8 @@ router.put('/:id', async (req, res) => {
         str(b.confirmation_number), str(b.finish_time_target),
         str(b.attachment_path), str(b.attachment_name),
         num(b.distance_km), str(b.distance_label), str(b.race_type), str(b.category),
+        num(b.elevation_gain_req_m), num(b.itra_point),
+        str(b.itra_url), str(b.qualification),
         parseTimeToSeconds(b.finish_time), parseTimeToSeconds(b.gun_time),
         num(b.overall_place), num(b.overall_total),
         num(b.gender_place), num(b.gender_total),
@@ -198,6 +215,8 @@ router.put('/:id', async (req, res) => {
         str(b.rpc_time), str(b.rpc_location),
         b.rpc_status || 'not_collected',
         str(b.rpc_attachment_path), str(b.rpc_attachment_name), str(b.rpc_notes),
+        jsonArr(b.mandatory_items),
+        str(b.strava_url), str(b.result_file_path), str(b.result_file_name),
         req.params.id, req.userId,
       ]
     );

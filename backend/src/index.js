@@ -72,6 +72,13 @@ async function startWithMigration() {
         distance_label TEXT,
         race_type      TEXT CHECK (race_type IN ('road','trail','track','virtual','other')),
         category       TEXT,
+        elevation_gain_req_m INTEGER,
+        itra_point     INTEGER,
+
+        -- Trail-specific
+        itra_url       TEXT,
+        qualification  TEXT,
+        mandatory_items JSONB NOT NULL DEFAULT '[]',
 
         -- Results
         finish_time_seconds INTEGER, gun_time_seconds INTEGER, pace_per_km_seconds INTEGER,
@@ -100,6 +107,8 @@ async function startWithMigration() {
         -- Notes
         notes TEXT, race_report TEXT,
         results_url TEXT, certificate_url TEXT,
+        strava_url TEXT,
+        result_file_path TEXT, result_file_name TEXT,
 
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -126,7 +135,16 @@ async function startWithMigration() {
       ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_attachment_path  TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_attachment_name  TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_notes            TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS elevation_gain_req_m INTEGER;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS itra_point           INTEGER;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS itra_url             TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS qualification        TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS mandatory_items      JSONB DEFAULT '[]';
       UPDATE races SET facilities = '[]' WHERE facilities IS NULL;
+      UPDATE races SET mandatory_items = '[]' WHERE mandatory_items IS NULL;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS strava_url        TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS result_file_path  TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS result_file_name  TEXT;
 
       CREATE INDEX IF NOT EXISTS idx_races_user_id  ON races(user_id);
       CREATE INDEX IF NOT EXISTS idx_races_race_date ON races(race_date DESC);

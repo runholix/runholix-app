@@ -58,7 +58,7 @@ export default function DashboardPage() {
           { label: 'Races completed', value: stats?.total_completed || 0, icon: 'ti-trophy', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
           { label: 'Upcoming', value: stats?.upcoming_count || 0, icon: 'ti-calendar-event', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
           { label: 'Total distance', value: fmtDist(stats?.total_distance_km), icon: 'ti-route', color: 'var(--color-primary)', bg: 'var(--color-primary-bg)' },
-          { label: 'Best marathon', value: stats?.best_marathon ? fmtTime(stats.best_marathon) : '—', icon: 'ti-medal', color: '#7c3aed', bg: '#faf5ff' },
+          { label: 'Total elevation', value: stats?.total_elevation_m > 0 ? `${Number(stats.total_elevation_m).toLocaleString()} m` : '—', icon: 'ti-mountain', color: '#7c3aed', bg: '#faf5ff' },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -77,9 +77,10 @@ export default function DashboardPage() {
         <div className="card">
           <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Personal bests</div>
           {[
-            { label: '10 km', value: fmtTime(stats?.best_10k) },
+            { label: '5 km',          value: fmtTime(stats?.best_5k) },
+            { label: '10 km',         value: fmtTime(stats?.best_10k) },
             { label: 'Half marathon', value: fmtTime(stats?.best_half) },
-            { label: 'Marathon', value: fmtTime(stats?.best_marathon) },
+            { label: 'Marathon',      value: fmtTime(stats?.best_marathon) },
           ].map(pb => (
             <div key={pb.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-border)' }}>
               <span style={{ color: 'var(--color-text-muted)' }}>{pb.label}</span>

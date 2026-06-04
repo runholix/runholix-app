@@ -10,6 +10,17 @@ function fmtTime(sec) {
   return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
 }
 
+// Locale-formatted number with optional decimal places and suffix
+function fmtNum(v, { decimals, suffix = '' } = {}) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  if (isNaN(n)) return null;
+  const formatted = decimals !== undefined
+    ? n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : n.toLocaleString();
+  return suffix ? `${formatted} ${suffix}` : formatted;
+}
+
 const STATUS_META = {
   completed: { label: 'Completed', cls: 'badge-completed' },
   registered: { label: 'Registered', cls: 'badge-registered' },
@@ -20,24 +31,90 @@ const STATUS_META = {
 
 function PdfViewer({ userId, filePath, fileName, label = 'Attachment' }) {
   const [open, setOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   if (!filePath || !fileName) return null;
   const url = api.attachmentUrl(userId, filePath.split('/').pop());
+  // Download uses same URL but with Content-Disposition override via query param
+  const downloadUrl = url + '&download=1';
+
   return (
     <div style={{ marginBottom: 24 }}>
       <div className="form-section-title">{label}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginBottom: open ? 8 : 0 }}>
-        <i className="ti ti-file-type-pdf" style={{ color: 'var(--color-danger)', fontSize: 18 }} />
-        <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</span>
-        <button onClick={() => setOpen(v => !v)} className="btn btn-secondary btn-sm">
-          <i className={`ti ${open ? 'ti-eye-off' : 'ti-eye'}`} /> {open ? 'Hide' : 'View PDF'}
+
+      {/* File row */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 12px',
+        background: 'var(--color-bg)',
+        border: '1px solid var(--color-border)',
+        borderRadius: open ? 'var(--radius) var(--radius) 0 0' : 'var(--radius)',
+        borderBottom: open ? 'none' : undefined,
+      }}>
+        <i className="ti ti-file-type-pdf" style={{ color: 'var(--color-danger)', fontSize: 18, flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {fileName}
+        </span>
+        {/* Toggle inline view */}
+        <button onClick={() => setOpen(v => !v)} className="btn btn-ghost btn-sm" title={open ? 'Hide' : 'View PDF'}>
+          <i className={`ti ${open ? 'ti-eye-off' : 'ti-eye'}`} />
         </button>
+        {/* Fullscreen */}
+        <button onClick={() => setFullscreen(true)} className="btn btn-ghost btn-sm" title="Full screen">
+          <i className="ti ti-arrows-maximize" />
+        </button>
+        {/* Download */}
+        <a href={downloadUrl} download={fileName} className="btn btn-ghost btn-sm" title="Download">
+          <i className="ti ti-download" />
+        </a>
       </div>
+
+      {/* Inline iframe */}
       {open && (
         <iframe
           src={url}
-          title="Attachment"
-          style={{ width: '100%', height: 600, border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', display: 'block' }}
+          title={fileName}
+          style={{
+            width: '100%', height: 600, display: 'block',
+            border: '1px solid var(--color-border)',
+            borderTop: 'none',
+            borderRadius: '0 0 var(--radius) var(--radius)',
+          }}
         />
+      )}
+
+      {/* Fullscreen modal */}
+      {fullscreen && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Modal toolbar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 16px',
+            background: 'var(--color-surface)',
+            borderBottom: '1px solid var(--color-border)',
+            flexShrink: 0,
+          }}>
+            <i className="ti ti-file-type-pdf" style={{ color: 'var(--color-danger)', fontSize: 18 }} />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {fileName}
+            </span>
+            <a href={downloadUrl} download={fileName} className="btn btn-secondary btn-sm" title="Download">
+              <i className="ti ti-download" /> Download
+            </a>
+            <button onClick={() => setFullscreen(false)} className="btn btn-ghost btn-sm" title="Close">
+              <i className="ti ti-x" style={{ fontSize: 16 }} />
+            </button>
+          </div>
+          {/* Full-height iframe */}
+          <iframe
+            src={url}
+            title={fileName}
+            style={{ flex: 1, border: 'none', display: 'block', background: '#525659' }}
+          />
+        </div>
       )}
     </div>
   );
@@ -123,9 +200,9 @@ export default function RaceDetailPage() {
         <div className="result-cards">
           {[
             { label: 'Finish time', value: fmtTime(race.finish_time_seconds), icon: 'ti-clock', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
-            { label: 'Overall place', value: race.overall_place ? `${race.overall_place}${race.overall_total ? ` / ${race.overall_total}` : ''}` : '—', icon: 'ti-users', color: 'var(--color-primary)', bg: 'var(--color-primary-bg)' },
-            { label: 'Gender place', value: race.gender_place ? `${race.gender_place}${race.gender_total ? ` / ${race.gender_total}` : ''}` : '—', icon: 'ti-user', color: '#7c3aed', bg: '#faf5ff' },
-            { label: 'Age group', value: race.age_group_place ? `${race.age_group_place}${race.age_group_total ? ` / ${race.age_group_total}` : ''} ${race.age_group_label || ''}`.trim() : '—', icon: 'ti-medal', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+            { label: 'Overall place', value: race.overall_place ? `${Number(race.overall_place).toLocaleString()}${race.overall_total ? ` / ${Number(race.overall_total).toLocaleString()}` : ''}` : '—', icon: 'ti-users', color: 'var(--color-primary)', bg: 'var(--color-primary-bg)' },
+            { label: 'Gender place', value: race.gender_place ? `${Number(race.gender_place).toLocaleString()}${race.gender_total ? ` / ${Number(race.gender_total).toLocaleString()}` : ''}` : '—', icon: 'ti-user', color: '#7c3aed', bg: '#faf5ff' },
+            { label: 'Age group', value: race.age_group_place ? `${Number(race.age_group_place).toLocaleString()}${race.age_group_total ? ` / ${Number(race.age_group_total).toLocaleString()}` : ''} ${race.age_group_label || ''}`.trim() : '—', icon: 'ti-medal', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -147,6 +224,15 @@ export default function RaceDetailPage() {
           <Field label="Location" value={race.location} />
           <Field label="City" value={race.city} />
           <Field label="Country" value={race.country} />
+          {race.race_type === 'trail' && race.itra_url && (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 3 }}>ITRA URL</div>
+              <a href={race.itra_url} target="_blank" rel="noreferrer"
+                style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-primary)', wordBreak: 'break-all' }}>
+                {race.itra_url}
+              </a>
+            </div>
+          )}
         </Section>
 
         {/* Route file download */}
@@ -168,7 +254,7 @@ export default function RaceDetailPage() {
           <Field label="Bib number" value={race.bib_number} />
           <Field label="Name on BIB" value={race.bib_name} />
           <Field label="Confirmation #" value={race.confirmation_number} />
-          <Field label="Registration fee" value={race.registration_fee ? `${race.registration_fee} ${race.registration_currency || 'USD'}` : null} />
+          <Field label="Registration fee" value={race.registration_fee ? `${Number(race.registration_fee).toLocaleString()} ${race.registration_currency || 'USD'}` : null} />
           <Field label="Jersey size" value={race.jersey_size} />
           <Field label="Registered email" value={race.registered_email} />
           <Field label="Registered phone" value={race.registered_phone} />
@@ -176,11 +262,27 @@ export default function RaceDetailPage() {
           <Field label="Category" value={race.category} />
         </Section>
 
+        {/* Trail: Qualification */}
+        {race.race_type === 'trail' && race.qualification && (
+          <div style={{ marginBottom: 24 }}>
+            <div className="form-section-title">Qualification</div>
+            <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap' }}>
+              {race.qualification}
+            </p>
+          </div>
+        )}
+
         <PdfViewer userId={user?.id} filePath={race.attachment_path} fileName={race.attachment_name} />
 
         <Section title="Race details">
-          <Field label="Distance" value={race.distance_label || (race.distance_km ? `${parseFloat(race.distance_km).toFixed(2)} km` : null)} />
+          <Field label="Distance" value={race.distance_label || fmtNum(race.distance_km, { decimals: 2, suffix: 'km' })} />
           <Field label="Race type" value={race.race_type} />
+          {race.race_type === 'trail' && (
+            <Field label="Elevation gain (required)" value={fmtNum(race.elevation_gain_req_m, { suffix: 'm' })} />
+          )}
+          {race.race_type === 'trail' && race.itra_point != null && race.itra_point !== '' && (
+            <Field label="ITRA points" value={fmtNum(race.itra_point, { suffix: 'pts' })} />
+          )}
         </Section>
 
         {/* ── FACILITY ──────────────────────────────────────────────── */}
@@ -278,33 +380,90 @@ export default function RaceDetailPage() {
           </div>
         )}
 
+        {/* ── MANDATORY ITEMS (trail only) ───────────────────────────── */}
+        {race.race_type === 'trail' && Array.isArray(race.mandatory_items) && race.mandatory_items.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div className="form-section-title">Mandatory Items</div>
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 0 }}>
+                <thead>
+                  <tr style={{ background: 'var(--color-bg)' }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>
+                      Gear name
+                    </th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', width: 100 }}>
+                      Mandatory
+                    </th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', width: 110 }}>
+                      Recommended
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {race.mandatory_items.map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: idx < race.mandatory_items.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                      <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 500 }}>{item.name}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        {item.mandatory
+                          ? <i className="ti ti-circle-check-filled" style={{ fontSize: 18, color: 'var(--color-danger)' }} />
+                          : <i className="ti ti-circle-x" style={{ fontSize: 18, color: 'var(--color-border)' }} />}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        {item.recommended
+                          ? <i className="ti ti-circle-check-filled" style={{ fontSize: 18, color: 'var(--color-warning)' }} />
+                          : <i className="ti ti-circle-x" style={{ fontSize: 18, color: 'var(--color-border)' }} />}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {race.status === 'completed' && (
           <Section title="Results">
             <Field label="Finish time (chip)" value={fmtTime(race.finish_time_seconds)} mono />
             <Field label="Gun time" value={fmtTime(race.gun_time_seconds)} mono />
-            <Field label="Overall" value={race.overall_place ? `${race.overall_place}${race.overall_total ? ` / ${race.overall_total}` : ''}` : null} />
-            <Field label="Gender" value={race.gender_place ? `${race.gender_place}${race.gender_total ? ` / ${race.gender_total}` : ''}` : null} />
-            <Field label="Age group" value={race.age_group_place ? `${race.age_group_place}${race.age_group_total ? ` / ${race.age_group_total}` : ''} ${race.age_group_label || ''}`.trim() : null} />
+            <Field label="Overall" value={race.overall_place ? `${Number(race.overall_place).toLocaleString()}${race.overall_total ? ` / ${Number(race.overall_total).toLocaleString()}` : ''}` : null} />
+            <Field label="Gender" value={race.gender_place ? `${Number(race.gender_place).toLocaleString()}${race.gender_total ? ` / ${Number(race.gender_total).toLocaleString()}` : ''}` : null} />
+            <Field label="Age group" value={race.age_group_place ? `${Number(race.age_group_place).toLocaleString()}${race.age_group_total ? ` / ${Number(race.age_group_total).toLocaleString()}` : ''} ${race.age_group_label || ''}`.trim() : null} />
           </Section>
+        )}
+
+        {/* Result file download (outside completed guard — may be uploaded anytime) */}
+        {race.result_file_path && race.result_file_name && (
+          <div style={{ marginBottom: 24 }}>
+            <div className="form-section-title">Result file</div>
+            <a
+              href={api.resultFileUrl(user?.id, race.result_file_path.split('/').pop(), race.result_file_name)}
+              download={race.result_file_name}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex' }}
+            >
+              <i className="ti ti-download" /> {race.result_file_name}
+            </a>
+          </div>
         )}
 
         {(race.heart_rate_avg || race.elevation_gain_m || race.weather_condition) && (
           <Section title="Conditions & vitals">
-            <Field label="Avg heart rate" value={race.heart_rate_avg ? `${race.heart_rate_avg} bpm` : null} />
-            <Field label="Max heart rate" value={race.heart_rate_max ? `${race.heart_rate_max} bpm` : null} />
-            <Field label="Elevation gain" value={race.elevation_gain_m ? `${race.elevation_gain_m} m` : null} />
-            <Field label="Temperature" value={race.weather_temp_c != null ? `${race.weather_temp_c}°C` : null} />
+            <Field label="Avg heart rate" value={fmtNum(race.heart_rate_avg, { suffix: 'bpm' })} />
+            <Field label="Max heart rate" value={fmtNum(race.heart_rate_max, { suffix: 'bpm' })} />
+            <Field label="Elevation gain" value={fmtNum(race.elevation_gain_m, { suffix: 'm' })} />
+            <Field label="Temperature" value={race.weather_temp_c != null ? `${Number(race.weather_temp_c).toLocaleString()}°C` : null} />
             <Field label="Weather" value={race.weather_condition} />
           </Section>
         )}
 
-        {(race.website_url || race.results_url || race.certificate_url) && (
+        {(race.website_url || race.results_url || race.certificate_url || race.strava_url) && (
           <div style={{ marginBottom: 20 }}>
             <div className="form-section-title">Links</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {race.website_url && <a href={race.website_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><i className="ti ti-external-link" /> Race website</a>}
               {race.results_url && <a href={race.results_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><i className="ti ti-external-link" /> Official results</a>}
               {race.certificate_url && <a href={race.certificate_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><i className="ti ti-certificate" /> Certificate</a>}
+              {race.strava_url && <a href={race.strava_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><i className="ti ti-brand-strava" /> Strava activity</a>}
             </div>
           </div>
         )}

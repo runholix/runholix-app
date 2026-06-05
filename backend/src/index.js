@@ -5,6 +5,7 @@ import pool from './db/pool.js';
 import authRoutes from './routes/auth.js';
 import racesRoutes from './routes/races.js';
 import uploadRoutes from './routes/upload.js';
+import trainingRoutes from './routes/training.js';
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.get('/api/health', async (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/races', racesRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/training', trainingRoutes);
 
 async function startWithMigration() {
   const client = await pool.connect();
@@ -148,6 +150,20 @@ async function startWithMigration() {
       ALTER TABLE races ADD COLUMN IF NOT EXISTS strava_url        TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS result_file_path  TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS result_file_name  TEXT;
+
+      CREATE TABLE IF NOT EXISTS training_plans (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        plan_date DATE NOT NULL,
+        plan_time TEXT,
+        race_id UUID REFERENCES races(id) ON DELETE SET NULL,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_training_user ON training_plans(user_id);
+      CREATE INDEX IF NOT EXISTS idx_training_date  ON training_plans(plan_date);
 
       CREATE INDEX IF NOT EXISTS idx_races_user_id  ON races(user_id);
       CREATE INDEX IF NOT EXISTS idx_races_race_date ON races(race_date DESC);

@@ -48,6 +48,16 @@ export const api = {
   updateRace: (id, body) => request(`/races/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteRace: (id)       => request(`/races/${id}`, { method: 'DELETE' }),
 
+  // ── Training plans ──────────────────────────────────────────────────────
+  getTraining:    (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/training${q ? '?' + q : ''}`);
+  },
+  getTrainingPlan: (id)       => request(`/training/${id}`),
+  createTraining:  (body)     => request('/training', { method: 'POST', body: JSON.stringify(body) }),
+  updateTraining:  (id, body) => request(`/training/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteTraining:  (id)       => request(`/training/${id}`, { method: 'DELETE' }),
+
   // ── GPX / FIT / KML files (route preview + result activity) ──────────
   // Both route and result files use the same backend endpoint and file types.
   // POST  /api/upload/route            → { route_file_path, route_file_name }

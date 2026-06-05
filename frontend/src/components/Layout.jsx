@@ -6,6 +6,7 @@ import ThemeToggle from './ThemeToggle.jsx';
 const nav = [
   { to: '/', icon: 'ti-layout-dashboard', label: 'Dashboard', exact: true },
   { to: '/races', icon: 'ti-trophy', label: 'My Races' },
+  { to: '/calendar', icon: 'ti-calendar', label: 'Calendar' },
 ];
 
 function SidebarContent({ user, onLogout, onClose }) {

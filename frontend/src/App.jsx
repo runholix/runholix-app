@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import RacesPage from './pages/RacesPage.jsx';
 import RaceFormPage from './pages/RaceFormPage.jsx';
 import RaceDetailPage from './pages/RaceDetailPage.jsx';
+import CalendarPage from './pages/CalendarPage.jsx';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="races/new" element={<RaceFormPage />} />
             <Route path="races/:id" element={<RaceDetailPage />} />
             <Route path="races/:id/edit" element={<RaceFormPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

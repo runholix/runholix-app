@@ -48,7 +48,7 @@ async function startWithMigration() {
         cutoff_time       TEXT,
         route_file_path   TEXT,
         route_file_name   TEXT,
-        location TEXT, city TEXT, country TEXT, website_url TEXT,
+        location TEXT, city TEXT, country TEXT, website_url TEXT, instagram_url TEXT,
 
         -- Status
         status TEXT NOT NULL DEFAULT 'registered'
@@ -73,7 +73,7 @@ async function startWithMigration() {
         race_type      TEXT CHECK (race_type IN ('road','trail','track','virtual','other')),
         category       TEXT,
         elevation_gain_req_m INTEGER,
-        itra_point     INTEGER,
+        itra_point     TEXT,
 
         -- Trail-specific
         itra_url       TEXT,
@@ -136,8 +136,11 @@ async function startWithMigration() {
       ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_attachment_name  TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_notes            TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS elevation_gain_req_m INTEGER;
-      ALTER TABLE races ADD COLUMN IF NOT EXISTS itra_point           INTEGER;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS itra_point           TEXT;
+      -- Convert any existing integer values to text
+      ALTER TABLE races ALTER COLUMN itra_point TYPE TEXT USING itra_point::TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS itra_url             TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_url         TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS qualification        TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS mandatory_items      JSONB DEFAULT '[]';
       UPDATE races SET facilities = '[]' WHERE facilities IS NULL;

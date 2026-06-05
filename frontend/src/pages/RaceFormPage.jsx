@@ -6,7 +6,7 @@ import { api } from '../lib/api.js';
 const EMPTY = {
   event_name: '', race_date: '', flag_off_time: '', cutoff_time: '',
   route_file_path: '', route_file_name: '',
-  location: '', city: '', country: '', website_url: '',
+  location: '', city: '', country: '', website_url: '', instagram_url: '',
   itra_url: '',
   status: 'registered', registration_fee: '', registration_currency: 'USD',
   bib_number: '', bib_name: '', jersey_size: '',
@@ -263,12 +263,22 @@ function MandatoryItemsSection({ items, onChange }) {
                   />
                 </td>
                 <td style={{ padding:'8px 12px', textAlign:'center' }}>
-                  <input type="checkbox" checked={item.mandatory} onChange={e => updateItem(idx, 'mandatory', e.target.checked)}
-                    style={{ width:16, height:16, accentColor:'var(--color-danger)', cursor:'pointer' }} />
+                  <input type="checkbox" checked={item.mandatory} onChange={e => {
+                    const checked = e.target.checked;
+                    const updated = items.map((it, i) => i === idx
+                      ? { ...it, mandatory: checked, recommended: checked ? false : it.recommended }
+                      : it);
+                    onChange(updated);
+                  }} style={{ width:16, height:16, accentColor:'var(--color-danger)', cursor:'pointer' }} />
                 </td>
                 <td style={{ padding:'8px 12px', textAlign:'center' }}>
-                  <input type="checkbox" checked={item.recommended} onChange={e => updateItem(idx, 'recommended', e.target.checked)}
-                    style={{ width:16, height:16, accentColor:'var(--color-warning)', cursor:'pointer' }} />
+                  <input type="checkbox" checked={item.recommended} onChange={e => {
+                    const checked = e.target.checked;
+                    const updated = items.map((it, i) => i === idx
+                      ? { ...it, recommended: checked, mandatory: checked ? false : it.mandatory }
+                      : it);
+                    onChange(updated);
+                  }} style={{ width:16, height:16, accentColor:'var(--color-warning)', cursor:'pointer' }} />
                 </td>
                 <td style={{ padding:'8px 12px' }}>
                   <button type="button" onClick={() => removeItem(idx)} className="btn btn-ghost btn-sm" style={{ padding:'2px 6px' }}>
@@ -316,7 +326,7 @@ export default function RaceFormPage() {
         flag_off_time: race.flag_off_time || '', cutoff_time: race.cutoff_time || '',
         route_file_path: race.route_file_path || '', route_file_name: race.route_file_name || '',
         location: race.location || '', city: race.city || '', country: race.country || '',
-        website_url: race.website_url || '', itra_url: race.itra_url || '',
+        website_url: race.website_url || '', instagram_url: race.instagram_url || '', itra_url: race.itra_url || '',
         status: race.status || 'registered',
         registration_fee: race.registration_fee || '', registration_currency: race.registration_currency || 'USD',
         bib_number: race.bib_number || '', bib_name: race.bib_name || '',
@@ -424,6 +434,7 @@ export default function RaceFormPage() {
             <Field label="Country"><input value={form.country} onChange={set('country')} placeholder="Indonesia" /></Field>
             <Field label="Venue / location"><input value={form.location} onChange={set('location')} placeholder="Monas area" /></Field>
             <Field label="Race website URL"><input type="url" value={form.website_url} onChange={set('website_url')} placeholder="https://…" /></Field>
+            <Field label="Instagram URL (optional)"><input type="url" value={form.instagram_url} onChange={set('instagram_url')} placeholder="https://www.instagram.com/racehandle" /></Field>
           </div>
 
           {/* Trail-only: ITRA URL */}
@@ -527,7 +538,7 @@ export default function RaceFormPage() {
                   placeholder="2500" required={isTrail} />
               </Field>
               <Field label="ITRA point (optional)" hint="International Trail Running Association points">
-                <input type="number" value={form.itra_point} onChange={set('itra_point')} placeholder="3" min="0" max="6" />
+                <input type="text" value={form.itra_point} onChange={set('itra_point')} placeholder="e.g. 3 or 250" />
               </Field>
             </div>
           )}

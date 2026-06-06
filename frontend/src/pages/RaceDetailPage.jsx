@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
@@ -144,7 +144,9 @@ function Section({ title, children }) {
 export default function RaceDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+  const fromCalendar = location.state?.from === 'calendar';
   const [race, setRace] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -167,8 +169,11 @@ export default function RaceDetailPage() {
 
   return (
     <div className="page" style={{ maxWidth: 900 }}>
-      <Link to="/races" style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16 }}>
-        <i className="ti ti-arrow-left" /> Back to races
+      <Link
+        to={fromCalendar ? '/calendar' : '/races'}
+        style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16 }}
+      >
+        <i className="ti ti-arrow-left" /> {fromCalendar ? 'Back to calendar' : 'Back to races'}
       </Link>
 
       {/* Header */}

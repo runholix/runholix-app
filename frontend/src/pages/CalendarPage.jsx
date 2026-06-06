@@ -623,7 +623,7 @@ export default function CalendarPage() {
 
   const handleEventClick = (event, e) => {
     if (event.type === 'race' || event.type === 'rpc') {
-      navigate(`/races/${event.id}`);
+      navigate(`/races/${event.id}`, { state: { from: 'calendar' } });
     } else {
       const rect = e.currentTarget.getBoundingClientRect();
       setPopup({ plan: event.plan, rect });

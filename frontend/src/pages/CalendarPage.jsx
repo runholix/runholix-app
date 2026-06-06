@@ -2,15 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  startOfYear, endOfYear, eachDayOfInterval, eachWeekOfInterval,
   format, addMonths, subMonths, addWeeks, subWeeks,
   addDays, subDays, addYears, subYears,
-  isSameMonth, isSameDay, isToday, parseISO, getMonth, getYear,
-  startOfDay,
+  isSameMonth, isToday, parseISO, getYear, eachDayOfInterval,
 } from 'date-fns';
 import { api } from '../lib/api.js';
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────
 const VIEWS = ['yearly', 'monthly', 'weekly', 'daily'];
 const VIEW_LABELS = { yearly: 'Year', monthly: 'Month', weekly: 'Week', daily: 'Day' };
 
@@ -20,23 +18,108 @@ const EVENT_COLORS = {
   training: { bg: '#dcfce7', border: '#22c55e', text: '#166534' },
 };
 
-function eventStyle(type) {
-  const c = EVENT_COLORS[type];
-  return {
-    background: c.bg,
-    border: `1px solid ${c.border}`,
-    color: c.text,
-    borderRadius: 4,
-    padding: '1px 5px',
-    fontSize: 11,
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    cursor: 'pointer',
-    marginBottom: 2,
-    display: 'block',
-  };
+// ── Sort key for ordering events by time ──────────────────────────────────
+// Race flag-off → RPC time → training time → type order → name
+function eventSortKey(ev) {
+  const timeStr = ev.time || '';
+  // Parse HH:MM times to minutes for sorting; non-time strings sort after
+  const timeMin = /^\d{1,2}:\d{2}/.test(timeStr)
+    ? parseInt(timeStr) * 60 + parseInt(timeStr.split(':')[1])
+    : 9999;
+  const typeOrder = { race: 0, rpc: 1, training: 2 };
+  return [timeMin, typeOrder[ev.type] ?? 3, ev.label];
+}
+
+function sortedEvents(events) {
+  return [...events].sort((a, b) => {
+    const [am, at, al] = eventSortKey(a);
+    const [bm, bt, bl] = eventSortKey(b);
+    if (am !== bm) return am - bm;
+    if (at !== bt) return at - bt;
+    return al < bl ? -1 : al > bl ? 1 : 0;
+  });
+}
+
+// ── Build event list from races + training ────────────────────────────────
+function buildEvents(races, training) {
+  const events = [];
+  races.forEach(r => {
+    if (r.race_date) {
+      events.push({
+        type: 'race',
+        date: r.race_date.slice(0, 10),
+        label: r.event_name,
+        id: r.id,
+        time: r.flag_off_time || '',
+        race: r,
+      });
+    }
+    if (r.rpc_date_start) {
+      const label = `RPC: ${r.event_name}`;
+      events.push({
+        type: 'rpc',
+        date: r.rpc_date_start.slice(0, 10),
+        label,
+        id: r.id,
+        time: r.rpc_time || '',
+        race: r,
+      });
+      if (r.rpc_date_end && r.rpc_date_end.slice(0, 10) !== r.rpc_date_start.slice(0, 10)) {
+        events.push({
+          type: 'rpc',
+          date: r.rpc_date_end.slice(0, 10),
+          label: `${label} (end)`,
+          id: r.id,
+          time: r.rpc_time || '',
+          race: r,
+        });
+      }
+    }
+  });
+  training.forEach(t => {
+    events.push({
+      type: 'training',
+      date: t.plan_date.slice(0, 10),
+      label: t.name,
+      id: t.id,
+      time: t.plan_time || '',
+      plan: t,
+    });
+  });
+  return events;
+}
+
+function eventsForDate(events, dateStr) {
+  return sortedEvents(events.filter(e => e.date === dateStr));
+}
+
+// ── Shared chip ───────────────────────────────────────────────────────────
+function EventChip({ event, onEventClick }) {
+  const c = EVENT_COLORS[event.type];
+  return (
+    <span
+      onClick={e => { e.stopPropagation(); onEventClick(event, e); }}
+      title={event.label + (event.time ? ` · ${event.time}` : '')}
+      style={{
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        color: c.text,
+        borderRadius: 4,
+        padding: '1px 5px',
+        fontSize: 11,
+        fontWeight: 500,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        cursor: 'pointer',
+        marginBottom: 2,
+        display: 'block',
+      }}
+    >
+      {event.type === 'race' ? '🏃 ' : event.type === 'rpc' ? '📦 ' : '📋 '}
+      {event.label}
+    </span>
+  );
 }
 
 // ── Training Plan Form Modal ──────────────────────────────────────────────
@@ -48,7 +131,13 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
     race_id: plan?.race_id || '',
     notes: plan?.notes || '',
   });
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    if (plan?.race_id) {
+      const r = races.find(r => r.id === plan.race_id);
+      return r?.event_name || '';
+    }
+    return '';
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -61,11 +150,7 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
     e.preventDefault();
     setError(''); setSaving(true);
     try {
-      if (plan?.id) {
-        await api.updateTraining(plan.id, form);
-      } else {
-        await api.createTraining(form);
-      }
+      plan?.id ? await api.updateTraining(plan.id, form) : await api.createTraining(form);
       onSave();
     } catch (err) {
       setError(err.message);
@@ -74,23 +159,20 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 500,
-      background: 'rgba(0,0,0,0.5)', display: 'flex',
-      alignItems: 'center', justifyContent: 'center', padding: 16,
-    }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="card" style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}>
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="card" style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 16, fontWeight: 600 }}>{plan?.id ? 'Edit training plan' : 'Add training plan'}</h2>
           <button onClick={onClose} className="btn btn-ghost btn-sm"><i className="ti ti-x" /></button>
         </div>
-
         {error && <div className="alert-error">{error}</div>}
-
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group">
             <label className="form-label">Name *</label>
-            <input value={form.name} onChange={set('name')} placeholder="e.g. Long run 30km" required />
+            <input value={form.name} onChange={set('name')} placeholder="e.g. Long run 30 km" required />
           </div>
           <div className="grid-form-2">
             <div className="form-group">
@@ -111,27 +193,18 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
               style={{ marginBottom: 4 }}
             />
             {search && (
-              <div style={{
-                border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
-                maxHeight: 160, overflowY: 'auto', background: 'var(--color-surface)',
-              }}>
+              <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', maxHeight: 160, overflowY: 'auto', background: 'var(--color-surface)' }}>
                 <div
                   onClick={() => { setForm(f => ({ ...f, race_id: '' })); setSearch(''); }}
                   style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: 'var(--color-text-muted)' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg)'}
                   onMouseLeave={e => e.currentTarget.style.background = ''}
-                >
-                  — None
-                </div>
+                >— None</div>
                 {filteredRaces.map(r => (
                   <div
                     key={r.id}
                     onClick={() => { setForm(f => ({ ...f, race_id: r.id })); setSearch(r.event_name); }}
-                    style={{
-                      padding: '8px 12px', fontSize: 13, cursor: 'pointer',
-                      background: form.race_id === r.id ? 'var(--color-primary-bg)' : '',
-                      color: form.race_id === r.id ? 'var(--color-primary)' : '',
-                    }}
+                    style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', background: form.race_id === r.id ? 'var(--color-primary-bg)' : '', color: form.race_id === r.id ? 'var(--color-primary)' : '' }}
                     onMouseEnter={e => { if (form.race_id !== r.id) e.currentTarget.style.background = 'var(--color-bg)'; }}
                     onMouseLeave={e => { if (form.race_id !== r.id) e.currentTarget.style.background = ''; }}
                   >
@@ -139,9 +212,7 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
                     <div style={{ fontSize: 11, color: 'var(--color-text-hint)' }}>{r.race_date?.slice(0, 10)}</div>
                   </div>
                 ))}
-                {filteredRaces.length === 0 && (
-                  <div style={{ padding: '8px 12px', fontSize: 13, color: 'var(--color-text-hint)' }}>No races found</div>
-                )}
+                {filteredRaces.length === 0 && <div style={{ padding: '8px 12px', fontSize: 13, color: 'var(--color-text-hint)' }}>No races found</div>}
               </div>
             )}
             {form.race_id && !search && (
@@ -154,8 +225,7 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
           </div>
           <div className="form-group">
             <label className="form-label">Notes (optional)</label>
-            <textarea value={form.notes} onChange={set('notes')} rows={3}
-              placeholder="Details, targets, gear…" style={{ resize: 'vertical' }} />
+            <textarea value={form.notes} onChange={set('notes')} rows={3} placeholder="Details, targets, gear…" style={{ resize: 'vertical' }} />
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--color-border)' }}>
             <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
@@ -180,137 +250,120 @@ function TrainingPopup({ plan, anchorRect, onEdit, onDelete, onClose }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const style = {
+  // On mobile (< 480px) → bottom sheet; on desktop → anchored popup
+  const isMobile = window.innerWidth < 480;
+
+  const popupStyle = isMobile ? {
     position: 'fixed',
-    zIndex: 400,
+    left: 0, right: 0, bottom: 0,
+    zIndex: 600,
+    background: 'var(--color-surface)',
+    borderTop: '1px solid var(--color-border)',
+    borderRadius: '16px 16px 0 0',
+    padding: 20,
+    maxHeight: '80vh',
+    overflowY: 'auto',
+    boxShadow: '0 -4px 24px rgba(0,0,0,0.2)',
+  } : {
+    position: 'fixed',
+    zIndex: 600,
     background: 'var(--color-surface)',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-lg)',
     boxShadow: 'var(--shadow-md)',
     padding: 16,
     minWidth: 260,
-    maxWidth: 320,
+    maxWidth: 340,
+    maxHeight: '60vh',
+    overflowY: 'auto',
+    top: anchorRect ? Math.min(anchorRect.bottom + 6, window.innerHeight - 320) : '50%',
+    left: anchorRect ? Math.min(anchorRect.left, window.innerWidth - 360) : '50%',
   };
 
-  // Position near anchor
-  if (anchorRect) {
-    style.top = Math.min(anchorRect.bottom + 6, window.innerHeight - 200);
-    style.left = Math.min(anchorRect.left, window.innerWidth - 340);
-  }
-
   return (
-    <div ref={ref} style={style}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, flex: 1, marginRight: 8 }}>{plan.name}</div>
-        <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: '2px 4px' }}><i className="ti ti-x" style={{ fontSize: 14 }} /></button>
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
-        <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 4 }} />{format(parseISO(plan.plan_date), 'dd MMM yyyy')}</span>
-        {plan.plan_time && <span><i className="ti ti-clock" style={{ verticalAlign: '-2px', marginRight: 4 }} />{plan.plan_time}</span>}
-        {plan.race_name && <span><i className="ti ti-trophy" style={{ verticalAlign: '-2px', marginRight: 4 }} />{plan.race_name}</span>}
-      </div>
-      {plan.notes && (
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{plan.notes}</p>
+    <>
+      {/* Backdrop on mobile */}
+      {isMobile && (
+        <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 599, background: 'rgba(0,0,0,0.4)' }} />
       )}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={onEdit} className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
-          <i className="ti ti-edit" /> Edit
-        </button>
-        <button onClick={onDelete} className="btn btn-danger btn-sm" style={{ flex: 1 }}>
-          <i className="ti ti-trash" /> Delete
-        </button>
+      <div ref={ref} style={popupStyle}>
+        {/* Drag handle on mobile */}
+        {isMobile && <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--color-border)', margin: '0 auto 16px' }} />}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, flex: 1, marginRight: 8 }}>{plan.name}</div>
+          <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: '2px 4px', flexShrink: 0 }}>
+            <i className="ti ti-x" style={{ fontSize: 14 }} />
+          </button>
+        </div>
+
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+          <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 4 }} />{format(parseISO(plan.plan_date), 'dd MMM yyyy')}</span>
+          {plan.plan_time && <span><i className="ti ti-clock" style={{ verticalAlign: '-2px', marginRight: 4 }} />{plan.plan_time}</span>}
+          {plan.race_name && <span><i className="ti ti-trophy" style={{ verticalAlign: '-2px', marginRight: 4 }} />{plan.race_name}</span>}
+        </div>
+
+        {plan.notes && (
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{plan.notes}</p>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onEdit} className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
+            <i className="ti ti-edit" /> Edit
+          </button>
+          <button onClick={onDelete} className="btn btn-danger btn-sm" style={{ flex: 1 }}>
+            <i className="ti ti-trash" /> Delete
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
-}
-
-// ── Event Dot / Chip (shared across views) ────────────────────────────────
-function EventChip({ event, onEventClick }) {
-  return (
-    <span
-      onClick={e => { e.stopPropagation(); onEventClick(event, e); }}
-      style={eventStyle(event.type)}
-      title={event.label}
-    >
-      {event.type === 'race' && '🏃 '}
-      {event.type === 'rpc' && '📦 '}
-      {event.type === 'training' && '📋 '}
-      {event.label}
-    </span>
-  );
-}
-
-// ── Build event list from races + training ────────────────────────────────
-function buildEvents(races, training) {
-  const events = [];
-  races.forEach(r => {
-    if (r.race_date) {
-      events.push({ type: 'race', date: r.race_date.slice(0, 10), label: r.event_name, id: r.id });
-    }
-    if (r.rpc_date_start) {
-      const label = `RPC: ${r.event_name}`;
-      // Show on start date; if range, show on both
-      events.push({ type: 'rpc', date: r.rpc_date_start.slice(0, 10), label, id: r.id });
-      if (r.rpc_date_end && r.rpc_date_end.slice(0, 10) !== r.rpc_date_start.slice(0, 10)) {
-        events.push({ type: 'rpc', date: r.rpc_date_end.slice(0, 10), label: `${label} (end)`, id: r.id });
-      }
-    }
-  });
-  training.forEach(t => {
-    events.push({ type: 'training', date: t.plan_date.slice(0, 10), label: t.name, id: t.id, plan: t });
-  });
-  return events;
-}
-
-function eventsForDate(events, dateStr) {
-  return events.filter(e => e.date === dateStr);
 }
 
 // ── YEARLY VIEW ───────────────────────────────────────────────────────────
 function YearlyView({ date, events, onEventClick, onDayClick }) {
   const months = Array.from({ length: 12 }, (_, i) => new Date(getYear(date), i, 1));
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
       {months.map(month => {
         const start = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
-        const end   = endOfWeek(endOfMonth(month),   { weekStartsOn: 1 });
+        const end   = endOfWeek(endOfMonth(month),     { weekStartsOn: 1 });
         const days  = eachDayOfInterval({ start, end });
         return (
-          <div key={month.toISOString()} className="card" style={{ padding: 12 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
+          <div key={month.toISOString()} className="card" style={{ padding: 10 }}>
+            <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, textAlign: 'center' }}>
               {format(month, 'MMMM')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1 }}>
               {['M','T','W','T','F','S','S'].map((d, i) => (
-                <div key={i} style={{ textAlign: 'center', fontSize: 9, fontWeight: 600, color: 'var(--color-text-hint)', paddingBottom: 4 }}>{d}</div>
+                <div key={i} style={{ textAlign: 'center', fontSize: 9, fontWeight: 600, color: 'var(--color-text-hint)', paddingBottom: 3 }}>{d}</div>
               ))}
               {days.map(day => {
                 const ds = format(day, 'yyyy-MM-dd');
                 const dayEvents = eventsForDate(events, ds);
                 const inMonth = isSameMonth(day, month);
-                const raceEvt = dayEvents.find(e => e.type === 'race');
-                const rpcEvt  = dayEvents.find(e => e.type === 'rpc');
-                const trainEvt= dayEvents.find(e => e.type === 'training');
+                const raceEvt  = dayEvents.find(e => e.type === 'race');
+                const rpcEvt   = dayEvents.find(e => e.type === 'rpc');
+                const trainEvt = dayEvents.find(e => e.type === 'training');
                 return (
                   <div
                     key={ds}
-                    onClick={() => onDayClick && onDayClick(day)}
+                    onClick={() => onDayClick(day)}
                     style={{
-                      textAlign: 'center', fontSize: 10, padding: '2px 0',
+                      textAlign: 'center', fontSize: 9, padding: '2px 1px',
                       color: !inMonth ? 'var(--color-text-hint)' : isToday(day) ? 'var(--color-primary)' : 'var(--color-text)',
                       fontWeight: isToday(day) ? 700 : 400,
                       cursor: 'pointer',
-                      position: 'relative',
-                      borderRadius: 3,
+                      borderRadius: 2,
                       background: isToday(day) ? 'var(--color-primary-bg)' : '',
                     }}
                   >
                     {format(day, 'd')}
-                    {inMonth && (
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: 1, marginTop: 1, flexWrap: 'wrap' }}>
-                        {raceEvt  && <span style={{ width: 5, height: 5, borderRadius: '50%', background: EVENT_COLORS.race.border, display: 'block' }} title={raceEvt.label} onClick={e => { e.stopPropagation(); onEventClick(raceEvt, e); }} />}
-                        {rpcEvt   && <span style={{ width: 5, height: 5, borderRadius: '50%', background: EVENT_COLORS.rpc.border, display: 'block' }} title={rpcEvt.label} onClick={e => { e.stopPropagation(); onEventClick(rpcEvt, e); }} />}
-                        {trainEvt && <span style={{ width: 5, height: 5, borderRadius: '50%', background: EVENT_COLORS.training.border, display: 'block' }} title={trainEvt.label} onClick={e => { e.stopPropagation(); onEventClick(trainEvt, e); }} />}
+                    {inMonth && (raceEvt || rpcEvt || trainEvt) && (
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 1, marginTop: 1 }}>
+                        {raceEvt  && <span onClick={e => { e.stopPropagation(); onEventClick(raceEvt, e); }} style={{ width: 4, height: 4, borderRadius: '50%', background: EVENT_COLORS.race.border, display: 'block', cursor: 'pointer' }} />}
+                        {rpcEvt   && <span onClick={e => { e.stopPropagation(); onEventClick(rpcEvt, e); }}  style={{ width: 4, height: 4, borderRadius: '50%', background: EVENT_COLORS.rpc.border, display: 'block', cursor: 'pointer' }} />}
+                        {trainEvt && <span onClick={e => { e.stopPropagation(); onEventClick(trainEvt, e); }} style={{ width: 4, height: 4, borderRadius: '50%', background: EVENT_COLORS.training.border, display: 'block', cursor: 'pointer' }} />}
                       </div>
                     )}
                   </div>
@@ -327,18 +380,16 @@ function YearlyView({ date, events, onEventClick, onDayClick }) {
 // ── MONTHLY VIEW ──────────────────────────────────────────────────────────
 function MonthlyView({ date, events, onEventClick, onDayClick }) {
   const start = startOfWeek(startOfMonth(date), { weekStartsOn: 1 });
-  const end   = endOfWeek(endOfMonth(date),   { weekStartsOn: 1 });
+  const end   = endOfWeek(endOfMonth(date),     { weekStartsOn: 1 });
   const days  = eachDayOfInterval({ start, end });
 
   return (
     <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-      {/* Header */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', background: 'var(--color-bg)' }}>
         {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
-          <div key={d} style={{ padding: '8px 4px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>{d}</div>
+          <div key={d} style={{ padding: '8px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>{d}</div>
         ))}
       </div>
-      {/* Weeks */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
         {days.map((day, idx) => {
           const ds = format(day, 'yyyy-MM-dd');
@@ -347,9 +398,10 @@ function MonthlyView({ date, events, onEventClick, onDayClick }) {
           return (
             <div
               key={ds}
-              onClick={() => onDayClick && onDayClick(day)}
+              onClick={() => onDayClick(day)}
               style={{
-                minHeight: 90, padding: '4px 6px',
+                minHeight: 72,
+                padding: '4px 4px',
                 borderRight: (idx + 1) % 7 === 0 ? 'none' : '1px solid var(--color-border)',
                 borderBottom: '1px solid var(--color-border)',
                 background: !inMonth ? 'var(--color-bg)' : isToday(day) ? 'var(--color-primary-bg)' : 'var(--color-surface)',
@@ -357,17 +409,17 @@ function MonthlyView({ date, events, onEventClick, onDayClick }) {
               }}
             >
               <div style={{
-                fontSize: 12, fontWeight: isToday(day) ? 700 : 400,
+                fontSize: 11, fontWeight: isToday(day) ? 700 : 400,
                 color: !inMonth ? 'var(--color-text-hint)' : isToday(day) ? 'var(--color-primary)' : 'var(--color-text)',
-                marginBottom: 3,
+                marginBottom: 2, paddingLeft: 2,
               }}>
                 {format(day, 'd')}
               </div>
-              {dayEvents.slice(0, 3).map((ev, i) => (
+              {dayEvents.slice(0, 2).map((ev, i) => (
                 <EventChip key={i} event={ev} onEventClick={onEventClick} />
               ))}
-              {dayEvents.length > 3 && (
-                <div style={{ fontSize: 10, color: 'var(--color-text-hint)', marginTop: 2 }}>+{dayEvents.length - 3} more</div>
+              {dayEvents.length > 2 && (
+                <div style={{ fontSize: 10, color: 'var(--color-text-hint)', paddingLeft: 2 }}>+{dayEvents.length - 2}</div>
               )}
             </div>
           );
@@ -384,31 +436,32 @@ function WeeklyView({ date, events, onEventClick, onDayClick }) {
 
   return (
     <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+      {/* Day headers */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', background: 'var(--color-bg)' }}>
-        {days.map(day => (
-          <div key={day.toISOString()}
-            onClick={() => onDayClick && onDayClick(day)}
+        {days.map((day, idx) => (
+          <div
+            key={day.toISOString()}
+            onClick={() => onDayClick(day)}
             style={{
-              padding: '10px 8px', textAlign: 'center', cursor: 'pointer',
+              padding: '8px 4px', textAlign: 'center', cursor: 'pointer',
               borderBottom: '1px solid var(--color-border)',
-              borderRight: isSameDay(day, days[6]) ? 'none' : '1px solid var(--color-border)',
+              borderRight: idx === 6 ? 'none' : '1px solid var(--color-border)',
               background: isToday(day) ? 'var(--color-primary-bg)' : '',
-            }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)' }}>{format(day, 'EEE')}</div>
-            <div style={{
-              fontSize: 18, fontWeight: 600,
-              color: isToday(day) ? 'var(--color-primary)' : 'var(--color-text)',
-            }}>{format(day, 'd')}</div>
+            }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)' }}>{format(day, 'EEE')}</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: isToday(day) ? 'var(--color-primary)' : 'var(--color-text)' }}>{format(day, 'd')}</div>
           </div>
         ))}
       </div>
+      {/* Events */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
         {days.map((day, idx) => {
           const ds = format(day, 'yyyy-MM-dd');
           const dayEvents = eventsForDate(events, ds);
           return (
             <div key={ds} style={{
-              minHeight: 200, padding: '8px 6px',
+              minHeight: 160, padding: '6px 4px',
               borderRight: idx === 6 ? 'none' : '1px solid var(--color-border)',
               background: isToday(day) ? 'var(--color-primary-bg)' : 'var(--color-surface)',
             }}>
@@ -430,36 +483,45 @@ function DailyView({ date, events, onEventClick }) {
 
   return (
     <div className="card" style={{ minHeight: 300 }}>
-      <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{format(date, 'EEEE, d MMMM yyyy')}</div>
+      <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>
+        {format(date, 'EEEE, d MMMM yyyy')}
+      </div>
       {dayEvents.length === 0 ? (
         <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No events on this day.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {dayEvents.map((ev, i) => (
-            <div
-              key={i}
-              onClick={e => onEventClick(ev, e)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 14px', borderRadius: 'var(--radius)',
-                background: EVENT_COLORS[ev.type].bg,
-                border: `1px solid ${EVENT_COLORS[ev.type].border}`,
-                cursor: 'pointer',
-              }}
-            >
-              <span style={{ fontSize: 18 }}>
-                {ev.type === 'race' ? '🏃' : ev.type === 'rpc' ? '📦' : '📋'}
-              </span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 500, fontSize: 14, color: EVENT_COLORS[ev.type].text }}>{ev.label}</div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                  {ev.type === 'race' ? 'Race' : ev.type === 'rpc' ? 'Race Pack Collection' : 'Training'}
-                  {ev.plan?.plan_time && ` · ${ev.plan.plan_time}`}
+          {dayEvents.map((ev, i) => {
+            const c = EVENT_COLORS[ev.type];
+            // Time to display: flag_off for race, rpc_time for rpc, plan_time for training
+            const displayTime = ev.time;
+            const typeLabel = ev.type === 'race' ? 'Race' : ev.type === 'rpc' ? 'Race Pack Collection' : 'Training';
+            return (
+              <div
+                key={i}
+                onClick={e => onEventClick(ev, e)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 14px', borderRadius: 'var(--radius)',
+                  background: c.bg, border: `1px solid ${c.border}`,
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ fontSize: 20, flexShrink: 0 }}>
+                  {ev.type === 'race' ? '🏃' : ev.type === 'rpc' ? '📦' : '📋'}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, fontSize: 14, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ev.label}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                    {typeLabel}
+                    {displayTime ? ` · ${displayTime}` : ''}
+                  </div>
                 </div>
+                <i className="ti ti-chevron-right" style={{ color: 'var(--color-text-hint)', flexShrink: 0 }} />
               </div>
-              <i className="ti ti-chevron-right" style={{ color: 'var(--color-text-hint)' }} />
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -469,16 +531,40 @@ function DailyView({ date, events, onEventClick }) {
 // ── Legend ────────────────────────────────────────────────────────────────
 function Legend() {
   return (
-    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
       {[
         { type: 'race',     label: 'Race' },
-        { type: 'rpc',      label: 'Race Pack Collection' },
+        { type: 'rpc',      label: 'Race Pack' },
         { type: 'training', label: 'Training' },
       ].map(({ type, label }) => (
         <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: EVENT_COLORS[type].border, display: 'inline-block' }} />
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: EVENT_COLORS[type].border, flexShrink: 0, display: 'inline-block' }} />
           <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
         </div>
+      ))}
+    </div>
+  );
+}
+
+// ── View switcher (compact on mobile) ────────────────────────────────────
+function ViewSwitcher({ view, setView }) {
+  return (
+    <div style={{ display: 'flex', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 2, gap: 2, flexShrink: 0 }}>
+      {VIEWS.map(v => (
+        <button
+          key={v}
+          onClick={() => setView(v)}
+          style={{
+            padding: '5px 8px',
+            borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+            background: view === v ? 'var(--color-surface)' : 'transparent',
+            color: view === v ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            boxShadow: view === v ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {VIEW_LABELS[v]}
+        </button>
       ))}
     </div>
   );
@@ -492,14 +578,10 @@ export default function CalendarPage() {
   const [races, setRaces] = useState([]);
   const [training, setTraining] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // Modal state
   const [showForm, setShowForm] = useState(false);
   const [editPlan, setEditPlan] = useState(null);
   const [defaultDate, setDefaultDate] = useState('');
-
-  // Detail popup state
-  const [popup, setPopup] = useState(null); // { plan, rect }
+  const [popup, setPopup] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -516,7 +598,6 @@ export default function CalendarPage() {
 
   const events = buildEvents(races, training);
 
-  // Navigate prev/next based on view
   const navPrev = () => {
     if (view === 'yearly')  setDate(d => subYears(d, 1));
     if (view === 'monthly') setDate(d => subMonths(d, 1));
@@ -535,10 +616,9 @@ export default function CalendarPage() {
     if (view === 'monthly') return format(date, 'MMMM yyyy');
     if (view === 'weekly') {
       const s = startOfWeek(date, { weekStartsOn: 1 });
-      const e = addDays(s, 6);
-      return `${format(s, 'd MMM')} – ${format(e, 'd MMM yyyy')}`;
+      return `${format(s, 'd MMM')} – ${format(addDays(s, 6), 'd MMM yyyy')}`;
     }
-    return format(date, 'EEEE, d MMMM yyyy');
+    return format(date, 'd MMM yyyy');
   };
 
   const handleEventClick = (event, e) => {
@@ -550,11 +630,9 @@ export default function CalendarPage() {
     }
   };
 
-  const handleDayClick = (day) => {
-    if (view === 'yearly' || view === 'monthly' || view === 'weekly') {
-      setDate(day);
-      setView('daily');
-    }
+  const handleDayClick = day => {
+    setDate(day);
+    setView('daily');
   };
 
   const handleAddClick = () => {
@@ -563,12 +641,7 @@ export default function CalendarPage() {
     setShowForm(true);
   };
 
-  const handleEditPlan = () => {
-    setEditPlan(popup.plan);
-    setPopup(null);
-    setShowForm(true);
-  };
-
+  const handleEditPlan = () => { setEditPlan(popup.plan); setPopup(null); setShowForm(true); };
   const handleDeletePlan = async () => {
     if (!confirm(`Delete "${popup.plan.name}"?`)) return;
     await api.deleteTraining(popup.plan.id);
@@ -579,39 +652,29 @@ export default function CalendarPage() {
   return (
     <div className="page" style={{ maxWidth: 1200 }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 10 }}>
         <h1 className="page-title">Calendar</h1>
         <button onClick={handleAddClick} className="btn btn-primary btn-sm">
-          <i className="ti ti-plus" /> Add training plan
+          <i className="ti ti-plus" /> <span className="tablet-up" style={{ display: 'contents' }}>Add training plan</span>
         </button>
       </div>
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        {/* View switcher */}
-        <div style={{ display: 'flex', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 2, gap: 2 }}>
-          {VIEWS.map(v => (
-            <button key={v} onClick={() => setView(v)} style={{
-              padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-              background: view === v ? 'var(--color-surface)' : 'transparent',
-              color: view === v ? 'var(--color-primary)' : 'var(--color-text-muted)',
-              boxShadow: view === v ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            }}>{VIEW_LABELS[v]}</button>
-          ))}
+      {/* Toolbar: view switcher + nav + today */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <ViewSwitcher view={view} setView={setView} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minWidth: 0 }}>
+          <button onClick={navPrev} className="btn btn-ghost btn-sm" style={{ padding: '5px 8px', flexShrink: 0 }}>
+            <i className="ti ti-chevron-left" />
+          </button>
+          <span style={{ fontWeight: 600, fontSize: 13, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title()}</span>
+          <button onClick={navNext} className="btn btn-ghost btn-sm" style={{ padding: '5px 8px', flexShrink: 0 }}>
+            <i className="ti ti-chevron-right" />
+          </button>
         </div>
-
-        {/* Prev / Title / Next */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'center' }}>
-          <button onClick={navPrev} className="btn btn-ghost btn-sm"><i className="ti ti-chevron-left" /></button>
-          <span style={{ fontWeight: 600, fontSize: 14, minWidth: 160, textAlign: 'center' }}>{title()}</span>
-          <button onClick={navNext} className="btn btn-ghost btn-sm"><i className="ti ti-chevron-right" /></button>
-        </div>
-
-        {/* Today */}
-        <button onClick={() => setDate(new Date())} className="btn btn-secondary btn-sm">Today</button>
+        <button onClick={() => setDate(new Date())} className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }}>Today</button>
       </div>
 
-      <div style={{ marginBottom: 12 }}><Legend /></div>
+      <div style={{ marginBottom: 10 }}><Legend /></div>
 
       {loading ? (
         <div style={{ color: 'var(--color-text-muted)', padding: 40 }}>Loading…</div>
@@ -624,7 +687,6 @@ export default function CalendarPage() {
         </>
       )}
 
-      {/* Training detail popup */}
       {popup && (
         <TrainingPopup
           plan={popup.plan}
@@ -635,7 +697,6 @@ export default function CalendarPage() {
         />
       )}
 
-      {/* Training form modal */}
       {showForm && (
         <TrainingModal
           plan={editPlan}

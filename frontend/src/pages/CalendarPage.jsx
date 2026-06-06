@@ -18,6 +18,17 @@ const EVENT_COLORS = {
   training: { bg: '#dcfce7', border: '#22c55e', text: '#166534' },
 };
 
+// ── Responsive hook ───────────────────────────────────────────────────────
+function useWindowWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const handler = () => setW(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return w;
+}
+
 // ── Sort key for ordering events by time ──────────────────────────────────
 // Race flag-off → RPC time → training time → type order → name
 function eventSortKey(ev) {
@@ -379,64 +390,265 @@ function YearlyView({ date, events, onEventClick, onDayClick }) {
 
 // ── MONTHLY VIEW ──────────────────────────────────────────────────────────
 function MonthlyView({ date, events, onEventClick, onDayClick }) {
+  const w = useWindowWidth();
+  const isMobile = w < 640;
+  const [selectedDay, setSelectedDay] = useState(null);
   const start = startOfWeek(startOfMonth(date), { weekStartsOn: 1 });
   const end   = endOfWeek(endOfMonth(date),     { weekStartsOn: 1 });
   const days  = eachDayOfInterval({ start, end });
 
+  const handleDayTap = (day) => {
+    if (isMobile) {
+      const ds = format(day, 'yyyy-MM-dd');
+      const sel = selectedDay === ds ? null : ds;
+      setSelectedDay(sel);
+      // Still drill down on double-tap / explicit nav
+    } else {
+      onDayClick(day);
+    }
+  };
+
+  const selectedEvents = selectedDay ? eventsForDate(events, selectedDay) : [];
+
   return (
-    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', background: 'var(--color-bg)' }}>
-        {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
-          <div key={d} style={{ padding: '8px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>{d}</div>
-        ))}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
-        {days.map((day, idx) => {
-          const ds = format(day, 'yyyy-MM-dd');
-          const dayEvents = eventsForDate(events, ds);
-          const inMonth = isSameMonth(day, date);
-          return (
-            <div
-              key={ds}
-              onClick={() => onDayClick(day)}
-              style={{
-                minHeight: 72,
-                padding: '4px 4px',
-                borderRight: (idx + 1) % 7 === 0 ? 'none' : '1px solid var(--color-border)',
-                borderBottom: '1px solid var(--color-border)',
-                background: !inMonth ? 'var(--color-bg)' : isToday(day) ? 'var(--color-primary-bg)' : 'var(--color-surface)',
-                cursor: 'pointer',
-              }}
-            >
-              <div style={{
-                fontSize: 11, fontWeight: isToday(day) ? 700 : 400,
-                color: !inMonth ? 'var(--color-text-hint)' : isToday(day) ? 'var(--color-primary)' : 'var(--color-text)',
-                marginBottom: 2, paddingLeft: 2,
-              }}>
-                {format(day, 'd')}
+    <div>
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: isMobile && selectedDay ? 'var(--radius-lg) var(--radius-lg) 0 0' : 'var(--radius-lg)', overflow: 'hidden' }}>
+        {/* Day-of-week header */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', background: 'var(--color-bg)' }}>
+          {(isMobile
+            ? ['M','T','W','T','F','S','S']
+            : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+          ).map((d, i) => (
+            <div key={i} style={{
+              padding: isMobile ? '6px 2px' : '8px 4px',
+              textAlign: 'center',
+              fontSize: isMobile ? 10 : 11,
+              fontWeight: 600,
+              color: 'var(--color-text-muted)',
+              borderBottom: '1px solid var(--color-border)',
+            }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Day grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+          {days.map((day, idx) => {
+            const ds = format(day, 'yyyy-MM-dd');
+            const dayEvents = eventsForDate(events, ds);
+            const inMonth = isSameMonth(day, date);
+            const todayStyle = isToday(day);
+            const isSelected = isMobile && selectedDay === ds;
+
+            return (
+              <div
+                key={ds}
+                onClick={() => handleDayTap(day)}
+                style={{
+                  minHeight: isMobile ? 44 : 80,
+                  padding: isMobile ? '4px 2px' : '4px',
+                  borderRight: (idx + 1) % 7 === 0 ? 'none' : '1px solid var(--color-border)',
+                  borderBottom: '1px solid var(--color-border)',
+                  background: isSelected ? 'var(--color-primary-bg)' : !inMonth ? 'var(--color-bg)' : todayStyle ? 'var(--color-primary-bg)' : 'var(--color-surface)',
+                  cursor: 'pointer',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Day number */}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div style={{
+                    width: isMobile ? 24 : 'auto',
+                    height: isMobile ? 24 : 'auto',
+                    lineHeight: isMobile ? '24px' : 'normal',
+                    textAlign: 'center',
+                    fontSize: isMobile ? 12 : 12,
+                    fontWeight: todayStyle ? 700 : 400,
+                    color: !inMonth ? 'var(--color-text-hint)' : todayStyle ? '#fff' : isSelected ? 'var(--color-primary)' : 'var(--color-text)',
+                    background: todayStyle ? 'var(--color-primary)' : 'transparent',
+                    borderRadius: todayStyle ? '50%' : 0,
+                    marginBottom: isMobile ? 2 : 2,
+                  }}>
+                    {format(day, 'd')}
+                  </div>
+                </div>
+
+                {/* Mobile: coloured dots */}
+                {isMobile && inMonth && dayEvents.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
+                    {[...new Set(dayEvents.map(e => e.type))].slice(0, 3).map((type, i) => (
+                      <span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: EVENT_COLORS[type].border, display: 'block' }} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Desktop: chips */}
+                {!isMobile && (
+                  <>
+                    {dayEvents.slice(0, 2).map((ev, i) => (
+                      <EventChip key={i} event={ev} onEventClick={onEventClick} />
+                    ))}
+                    {dayEvents.length > 2 && (
+                      <div style={{ fontSize: 10, color: 'var(--color-text-hint)', paddingLeft: 2 }}>
+                        +{dayEvents.length - 2}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-              {dayEvents.slice(0, 2).map((ev, i) => (
-                <EventChip key={i} event={ev} onEventClick={onEventClick} />
-              ))}
-              {dayEvents.length > 2 && (
-                <div style={{ fontSize: 10, color: 'var(--color-text-hint)', paddingLeft: 2 }}>+{dayEvents.length - 2}</div>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
+
+      {/* Mobile: event list for selected day */}
+      {isMobile && selectedDay && (
+        <div style={{
+          border: '1px solid var(--color-border)',
+          borderTop: 'none',
+          borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
+          background: 'var(--color-surface)',
+          padding: 12,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+            {format(parseISO(selectedDay), 'EEEE, d MMMM')}
+            <button
+              onClick={() => onDayClick(parseISO(selectedDay))}
+              style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: 11, cursor: 'pointer', fontWeight: 500 }}
+            >
+              Day view →
+            </button>
+          </div>
+          {selectedEvents.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--color-text-hint)' }}>No events</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {selectedEvents.map((ev, i) => {
+                const c = EVENT_COLORS[ev.type];
+                return (
+                  <div
+                    key={i}
+                    onClick={e => { e.stopPropagation(); onEventClick(ev, e); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 10px', borderRadius: 'var(--radius)',
+                      background: c.bg, border: `1px solid ${c.border}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: 14, flexShrink: 0 }}>
+                      {ev.type === 'race' ? '🏃' : ev.type === 'rpc' ? '📦' : '📋'}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {ev.label}
+                      </div>
+                      {ev.time && <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{ev.time}</div>}
+                    </div>
+                    <i className="ti ti-chevron-right" style={{ color: 'var(--color-text-hint)', flexShrink: 0, fontSize: 13 }} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── WEEKLY VIEW ───────────────────────────────────────────────────────────
 function WeeklyView({ date, events, onEventClick, onDayClick }) {
+  const w = useWindowWidth();
+  const isMobile = w < 640;
   const start = startOfWeek(date, { weekStartsOn: 1 });
   const days  = eachDayOfInterval({ start, end: addDays(start, 6) });
 
+  // ── Mobile: vertical list of days ────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {days.map(day => {
+          const ds = format(day, 'yyyy-MM-dd');
+          const dayEvents = eventsForDate(events, ds);
+          const todayStyle = isToday(day);
+          return (
+            <div
+              key={ds}
+              className="card"
+              style={{
+                padding: '12px 14px',
+                border: todayStyle ? `2px solid var(--color-primary)` : '1px solid var(--color-border)',
+                background: todayStyle ? 'var(--color-primary-bg)' : 'var(--color-surface)',
+              }}
+            >
+              {/* Day header row */}
+              <div
+                onClick={() => onDayClick(day)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: dayEvents.length ? 10 : 0, cursor: 'pointer' }}
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  background: todayStyle ? 'var(--color-primary)' : 'var(--color-bg)',
+                }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: todayStyle ? '#fff' : 'var(--color-text-muted)', lineHeight: 1, textTransform: 'uppercase' }}>
+                    {format(day, 'EEE')}
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: todayStyle ? '#fff' : 'var(--color-text)', lineHeight: 1.2 }}>
+                    {format(day, 'd')}
+                  </div>
+                </div>
+                <div style={{ flex: 1, fontSize: 13, color: 'var(--color-text-muted)' }}>
+                  {format(day, 'MMMM yyyy')}
+                </div>
+                {dayEvents.length > 0 && (
+                  <div style={{ display: 'flex', gap: 3 }}>
+                    {[...new Set(dayEvents.map(e => e.type))].map(type => (
+                      <span key={type} style={{ width: 8, height: 8, borderRadius: '50%', background: EVENT_COLORS[type].border, display: 'inline-block' }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Events for this day */}
+              {dayEvents.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 46 }}>
+                  {dayEvents.map((ev, i) => {
+                    const c = EVENT_COLORS[ev.type];
+                    return (
+                      <div
+                        key={i}
+                        onClick={e => { e.stopPropagation(); onEventClick(ev, e); }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '7px 10px', borderRadius: 'var(--radius)',
+                          background: c.bg, border: `1px solid ${c.border}`,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span style={{ fontSize: 14, flexShrink: 0 }}>
+                          {ev.type === 'race' ? '🏃' : ev.type === 'rpc' ? '📦' : '📋'}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {ev.label}
+                          </div>
+                          {ev.time && <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{ev.time}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ── Desktop: 7-column horizontal grid ────────────────────────────────
   return (
     <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-      {/* Day headers */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', background: 'var(--color-bg)' }}>
         {days.map((day, idx) => (
           <div
@@ -454,7 +666,6 @@ function WeeklyView({ date, events, onEventClick, onDayClick }) {
           </div>
         ))}
       </div>
-      {/* Events */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
         {days.map((day, idx) => {
           const ds = format(day, 'yyyy-MM-dd');

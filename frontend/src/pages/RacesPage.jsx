@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api.js';
 
+const PAGE_SIZE = 10;
+
 function fmtTime(sec) {
   if (!sec) return null;
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
@@ -17,7 +19,7 @@ const STATUS_META = {
   dns:        { label: 'DNS',        cls: 'badge-dns' },
 };
 
-/* Mobile card view for each race */
+/* Mobile card */
 function RaceCard({ r }) {
   const sm = STATUS_META[r.status] || {};
   return (
@@ -47,25 +49,100 @@ function RaceCard({ r }) {
   );
 }
 
+/* Pagination controls */
+function Pagination({ page, totalPages, total, pageSize, onChange }) {
+  if (totalPages <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to   = Math.min(page * pageSize, total);
+
+  // Build page numbers: always show first, last, current ±1, with ellipsis
+  const pages = [];
+  const add = n => { if (n >= 1 && n <= totalPages && !pages.includes(n)) pages.push(n); };
+  add(1);
+  add(page - 1); add(page); add(page + 1);
+  add(totalPages);
+  pages.sort((a, b) => a - b);
+
+  const withGaps = [];
+  for (let i = 0; i < pages.length; i++) {
+    if (i > 0 && pages[i] - pages[i - 1] > 1) withGaps.push('…');
+    withGaps.push(pages[i]);
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
+      <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+        Showing {from}–{to} of {total} races
+      </div>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          className="btn btn-ghost btn-sm"
+          style={{ padding: '5px 8px' }}
+        >
+          <i className="ti ti-chevron-left" />
+        </button>
+
+        {withGaps.map((p, i) =>
+          p === '…' ? (
+            <span key={`gap-${i}`} style={{ padding: '5px 4px', fontSize: 13, color: 'var(--color-text-hint)' }}>…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className="btn btn-sm"
+              style={{
+                padding: '5px 10px',
+                minWidth: 34,
+                background: p === page ? 'var(--color-primary)' : 'var(--color-surface)',
+                color: p === page ? '#fff' : 'var(--color-text)',
+                border: `1px solid ${p === page ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                fontWeight: p === page ? 600 : 400,
+              }}
+            >
+              {p}
+            </button>
+          )
+        )}
+
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          className="btn btn-ghost btn-sm"
+          style={{ padding: '5px 8px' }}
+        >
+          <i className="ti ti-chevron-right" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function RacesPage() {
   const [races, setRaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ status: '', year: '', search: '' });
+  const [page, setPage] = useState(1);
 
   const load = async () => {
     setLoading(true);
-    const params = {};
+    const params = { sort: 'race_date', order: 'desc' };
     if (filters.status) params.status = filters.status;
-    if (filters.year) params.year = filters.year;
+    if (filters.year)   params.year   = filters.year;
     if (filters.search) params.search = filters.search;
     const data = await api.getRaces(params);
     setRaces(data);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [filters]);
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1); load(); }, [filters]);
 
-  const years = [...new Set(races.map(r => r.race_date?.slice(0,4)).filter(Boolean))].sort().reverse();
+  const years = [...new Set(races.map(r => r.race_date?.slice(0, 4)).filter(Boolean))].sort().reverse();
+
+  const totalPages = Math.ceil(races.length / PAGE_SIZE);
+  const paged = races.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
@@ -113,12 +190,13 @@ export default function RacesPage() {
         </div>
       ) : (
         <>
-          {/* Mobile card list (< 768px) */}
+          {/* Mobile card list */}
           <div className="mobile-only">
-            {races.map(r => <RaceCard key={r.id} r={r} />)}
+            {paged.map(r => <RaceCard key={r.id} r={r} />)}
+            <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={PAGE_SIZE} onChange={setPage} />
           </div>
 
-          {/* Table (≥ 768px) */}
+          {/* Table */}
           <div className="tablet-up">
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div className="table-wrap">
@@ -131,7 +209,7 @@ export default function RacesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {races.map(r => {
+                    {paged.map(r => {
                       const sm = STATUS_META[r.status] || {};
                       return (
                         <tr key={r.id}
@@ -146,11 +224,8 @@ export default function RacesPage() {
                           <td>
                             {r.race_type ? (
                               <span style={{
-                                display: 'inline-block',
-                                padding: '2px 8px',
-                                borderRadius: 99,
-                                fontSize: 12,
-                                fontWeight: 500,
+                                display: 'inline-block', padding: '2px 8px', borderRadius: 99,
+                                fontSize: 12, fontWeight: 500,
                                 background: r.race_type === 'trail' ? 'var(--color-warning-bg)' : 'var(--color-bg)',
                                 color: r.race_type === 'trail' ? 'var(--color-warning)' : 'var(--color-text-muted)',
                                 border: `1px solid ${r.race_type === 'trail' ? 'var(--color-warning)' : 'var(--color-border)'}`,
@@ -175,6 +250,7 @@ export default function RacesPage() {
                 </table>
               </div>
             </div>
+            <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={PAGE_SIZE} onChange={setPage} />
           </div>
         </>
       )}

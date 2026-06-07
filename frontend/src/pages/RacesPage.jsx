@@ -3,7 +3,15 @@ import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api.js';
 
-const PAGE_SIZE = 10;
+function usePageSize() {
+  const [size, setSize] = useState(() => window.innerWidth < 768 ? 5 : 10);
+  useEffect(() => {
+    const handler = () => setSize(window.innerWidth < 768 ? 5 : 10);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return size;
+}
 
 function fmtTime(sec) {
   if (!sec) return null;
@@ -120,6 +128,7 @@ function Pagination({ page, totalPages, total, pageSize, onChange }) {
 }
 
 export default function RacesPage() {
+  const pageSize = usePageSize();
   const [races, setRaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ status: '', year: '', search: '' });
@@ -141,8 +150,8 @@ export default function RacesPage() {
 
   const years = [...new Set(races.map(r => r.race_date?.slice(0, 4)).filter(Boolean))].sort().reverse();
 
-  const totalPages = Math.ceil(races.length / PAGE_SIZE);
-  const paged = races.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.ceil(races.length / pageSize);
+  const paged = races.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
@@ -193,7 +202,7 @@ export default function RacesPage() {
           {/* Mobile card list */}
           <div className="mobile-only">
             {paged.map(r => <RaceCard key={r.id} r={r} />)}
-            <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={PAGE_SIZE} onChange={setPage} />
+            <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={pageSize} onChange={setPage} />
           </div>
 
           {/* Table */}
@@ -250,7 +259,7 @@ export default function RacesPage() {
                 </table>
               </div>
             </div>
-            <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={PAGE_SIZE} onChange={setPage} />
+            <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={pageSize} onChange={setPage} />
           </div>
         </>
       )}

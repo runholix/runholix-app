@@ -67,24 +67,34 @@ function buildEvents(races, training) {
     }
     if (r.rpc_date_start) {
       const label = `RPC: ${r.event_name}`;
-      events.push({
-        type: 'rpc',
-        date: r.rpc_date_start.slice(0, 10),
-        label,
-        id: r.id,
-        time: r.rpc_time || '',
-        race: r,
+      const startDs = r.rpc_date_start.slice(0, 10);
+      const endDs   = r.rpc_date_end ? r.rpc_date_end.slice(0, 10) : startDs;
+
+      // Generate one event for every day in the RPC window
+      const rangeDays = eachDayOfInterval({
+        start: parseISO(startDs),
+        end:   parseISO(endDs),
       });
-      if (r.rpc_date_end && r.rpc_date_end.slice(0, 10) !== r.rpc_date_start.slice(0, 10)) {
+
+      rangeDays.forEach((day, idx) => {
+        const ds = format(day, 'yyyy-MM-dd');
+        const isFirst = idx === 0;
+        const isLast  = idx === rangeDays.length - 1;
+        const dayLabel = rangeDays.length === 1
+          ? label
+          : isFirst ? `${label} (start)`
+          : isLast  ? `${label} (end)`
+          : label;
+
         events.push({
           type: 'rpc',
-          date: r.rpc_date_end.slice(0, 10),
-          label: `${label} (end)`,
+          date: ds,
+          label: dayLabel,
           id: r.id,
           time: r.rpc_time || '',
           race: r,
         });
-      }
+      });
     }
   });
   training.forEach(t => {
@@ -784,8 +794,17 @@ function ViewSwitcher({ view, setView }) {
 // ── Main CalendarPage ─────────────────────────────────────────────────────
 export default function CalendarPage() {
   const navigate = useNavigate();
-  const [view, setView] = useState('monthly');
-  const [date, setDate] = useState(new Date());
+  const [view, setView] = useState(() => {
+    return sessionStorage.getItem('cal_view') || 'monthly';
+  });
+  const [date, setDate] = useState(() => {
+    const saved = sessionStorage.getItem('cal_date');
+    return saved ? new Date(saved) : new Date();
+  });
+
+  // Persist whenever view or date changes
+  useEffect(() => { sessionStorage.setItem('cal_view', view); }, [view]);
+  useEffect(() => { sessionStorage.setItem('cal_date', date.toISOString()); }, [date]);
   const [races, setRaces] = useState([]);
   const [training, setTraining] = useState([]);
   const [loading, setLoading] = useState(true);

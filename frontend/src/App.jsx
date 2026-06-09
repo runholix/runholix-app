@@ -4,6 +4,9 @@ import { ThemeProvider } from './hooks/useTheme.jsx';
 import Layout from './components/Layout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import ActivatePage from './pages/ActivatePage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
+import ConfirmEmailPage from './pages/ConfirmEmailPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import RacesPage from './pages/RacesPage.jsx';
 import RaceFormPage from './pages/RaceFormPage.jsx';
@@ -30,6 +33,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+          <Route path="/activate" element={<ActivatePage />} />
+          <Route path="/confirm-email" element={<ConfirmEmailPage />} />
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<DashboardPage />} />
             <Route path="races" element={<RacesPage />} />
@@ -37,6 +42,7 @@ export default function App() {
             <Route path="races/:id" element={<RaceDetailPage />} />
             <Route path="races/:id/edit" element={<RaceFormPage />} />
             <Route path="calendar" element={<CalendarPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.js';
 import racesRoutes from './routes/races.js';
 import uploadRoutes from './routes/upload.js';
 import trainingRoutes from './routes/training.js';
+import { startScheduler } from './scheduler.js';
 
 dotenv.config();
 
@@ -36,8 +37,21 @@ async function startWithMigration() {
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         name TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT FALSE,
+        activation_token TEXT,
+        activation_expires TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- Idempotent: add new columns to existing installs
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_expires TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMPTZ;
+      -- Existing users (pre-email feature) are grandfathered in as active
+      UPDATE users SET is_active = TRUE WHERE is_active = FALSE AND activation_token IS NULL;
 
       CREATE TABLE IF NOT EXISTS races (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -90,6 +104,7 @@ async function startWithMigration() {
 
         -- Vitals / conditions
         heart_rate_avg INTEGER, heart_rate_max INTEGER,
+        actual_distance_km NUMERIC(10,3),
         elevation_gain_m INTEGER,
         weather_temp_c NUMERIC(4,1), weather_condition TEXT,
 
@@ -148,6 +163,7 @@ async function startWithMigration() {
       UPDATE races SET facilities = '[]' WHERE facilities IS NULL;
       UPDATE races SET mandatory_items = '[]' WHERE mandatory_items IS NULL;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS strava_url        TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS actual_distance_km NUMERIC(10,3);
       ALTER TABLE races ADD COLUMN IF NOT EXISTS result_file_path  TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS result_file_name  TEXT;
 
@@ -173,5 +189,8 @@ async function startWithMigration() {
 }
 
 startWithMigration()
-  .then(() => app.listen(PORT, () => console.log(`API running on port ${PORT}`)))
+  .then(() => {
+    startScheduler();
+    app.listen(PORT, () => console.log(`API running on port ${PORT}`));
+  })
   .catch(err => { console.error('Startup failed:', err); process.exit(1); });

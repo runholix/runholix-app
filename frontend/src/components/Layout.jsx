@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 
@@ -7,6 +7,7 @@ const nav = [
   { to: '/', icon: 'ti-layout-dashboard', label: 'Dashboard', exact: true },
   { to: '/races', icon: 'ti-trophy', label: 'My Races' },
   { to: '/calendar', icon: 'ti-calendar', label: 'Calendar' },
+  { to: '/settings', icon: 'ti-settings', label: 'Settings' },
 ];
 
 function SidebarContent({ user, onLogout, onClose }) {
@@ -74,7 +75,14 @@ function SidebarContent({ user, onLogout, onClose }) {
         </div>
 
         {/* User row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Link to="/settings" onClick={onClose} style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
+          color: 'inherit', borderRadius: 'var(--radius)', padding: '4px 2px',
+          transition: 'background 0.1s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg)'}
+          onMouseLeave={e => e.currentTarget.style.background = ''}
+        >
           <div style={{
             width: 30, height: 30, borderRadius: '50%',
             background: 'var(--color-primary-bg)',
@@ -91,7 +99,8 @@ function SidebarContent({ user, onLogout, onClose }) {
               {user?.email}
             </div>
           </div>
-        </div>
+          <i className="ti ti-settings" style={{ fontSize: 13, color: 'var(--color-text-hint)', flexShrink: 0 }} />
+        </Link>
 
         <button onClick={onLogout} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}>
           <i className="ti ti-logout" style={{ fontSize: 14 }} /> Sign out

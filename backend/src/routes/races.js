@@ -144,33 +144,35 @@ router.post('/', async (req, res) => {
         age_group_label,      -- $41
         heart_rate_avg,       -- $42
         heart_rate_max,       -- $43
-        elevation_gain_m,     -- $44
-        weather_temp_c,       -- $45
-        weather_condition,    -- $46
-        notes,                -- $47
-        race_report,          -- $48
-        results_url,          -- $49
-        certificate_url,      -- $50
-        facilities,           -- $51
-        rpc_date_start,       -- $52
-        rpc_date_end,         -- $53
-        rpc_time,             -- $54
-        rpc_location,         -- $55
-        rpc_status,           -- $56
-        rpc_attachment_path,  -- $57
-        rpc_attachment_name,  -- $58
-        rpc_notes,            -- $59
-        mandatory_items,      -- $60
-        strava_url,           -- $61
-        result_file_path,     -- $62
-        result_file_name      -- $63
+        actual_distance_km,   -- $44
+        elevation_gain_m,     -- $45
+        weather_temp_c,       -- $46
+        weather_condition,    -- $47
+        notes,                -- $48
+        race_report,          -- $49
+        results_url,          -- $50
+        certificate_url,      -- $51
+        facilities,           -- $52
+        rpc_date_start,       -- $53
+        rpc_date_end,         -- $54
+        rpc_time,             -- $55
+        rpc_location,         -- $56
+        rpc_status,           -- $57
+        rpc_attachment_path,  -- $58
+        rpc_attachment_name,  -- $59
+        rpc_notes,            -- $60
+        mandatory_items,      -- $61
+        strava_url,           -- $62
+        result_file_path,     -- $63
+        result_file_name      -- $64
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
         $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,
         $43,$44,$45,$46,$47,$48,$49,$50,$51,$52,
-        $53,$54,$55,$56,$57,$58,$59,$60,$61,$62,$63
+        $53,$54,$55,$56,$57,$58,$59,$60,$61,$62,
+        $63,$64
       ) RETURNING *`,
       [
         req.userId,                          // $1
@@ -216,26 +218,27 @@ router.post('/', async (req, res) => {
         str(b.age_group_label),             // $41
         num(b.heart_rate_avg),              // $42
         num(b.heart_rate_max),              // $43
-        num(b.elevation_gain_m),            // $44
-        num(b.weather_temp_c),              // $45
-        str(b.weather_condition),           // $46
-        str(b.notes),                       // $47
-        str(b.race_report),                 // $48
-        str(b.results_url),                 // $49
-        str(b.certificate_url),             // $50
-        jsonArr(b.facilities),              // $51
-        str(b.rpc_date_start),              // $52
-        str(b.rpc_date_end),                // $53
-        str(b.rpc_time),                    // $54
-        str(b.rpc_location),                // $55
-        b.rpc_status || 'not_collected',    // $56
-        str(b.rpc_attachment_path),         // $57
-        str(b.rpc_attachment_name),         // $58
-        str(b.rpc_notes),                   // $59
-        jsonArr(b.mandatory_items),         // $60
-        str(b.strava_url),                  // $61
-        str(b.result_file_path),            // $62
-        str(b.result_file_name),            // $63
+        num(b.actual_distance_km),          // $44
+        num(b.elevation_gain_m),            // $45
+        num(b.weather_temp_c),              // $46
+        str(b.weather_condition),           // $47
+        str(b.notes),                       // $48
+        str(b.race_report),                 // $49
+        str(b.results_url),                 // $50
+        str(b.certificate_url),             // $51
+        jsonArr(b.facilities),              // $52
+        str(b.rpc_date_start),              // $53
+        str(b.rpc_date_end),                // $54
+        str(b.rpc_time),                    // $55
+        str(b.rpc_location),                // $56
+        b.rpc_status || 'not_collected',    // $57
+        str(b.rpc_attachment_path),         // $58
+        str(b.rpc_attachment_name),         // $59
+        str(b.rpc_notes),                   // $60
+        jsonArr(b.mandatory_items),         // $61
+        str(b.strava_url),                  // $62
+        str(b.result_file_path),            // $63
+        str(b.result_file_name),            // $64
       ]
     );
     res.status(201).json(mapRace(rows[0]));
@@ -243,51 +246,50 @@ router.post('/', async (req, res) => {
 });
 
 // ── UPDATE ────────────────────────────────────────────────────────────────
-// 62 SET columns → $1..$62, then id=$63 user_id=$64
+// 62 SET columns $1..$62, then id=$63 user_id=$64
 router.put('/:id', async (req, res) => {
   const b = req.body;
   if (!b.cutoff_time) return res.status(400).json({ error: 'cutoff_time required' });
   try {
     const { rows } = await pool.query(`
       UPDATE races SET
-        event_name=$1,            race_date=$2,
-        flag_off_time=$3,         cutoff_time=$4,
-        route_file_path=$5,       route_file_name=$6,
-        location=$7,              city=$8,
-        country=$9,               website_url=$10,
-        instagram_url=$11,
-        status=$12,
-        registration_fee=$13,     registration_currency=$14,
-        bib_number=$15,           bib_name=$16,
+        event_name=$1,           race_date=$2,
+        flag_off_time=$3,        cutoff_time=$4,
+        route_file_path=$5,      route_file_name=$6,
+        location=$7,             city=$8,
+        country=$9,              website_url=$10,
+        instagram_url=$11,       status=$12,
+        registration_fee=$13,    registration_currency=$14,
+        bib_number=$15,          bib_name=$16,
         jersey_size=$17,
-        registered_email=$18,     registered_phone=$19,
-        confirmation_number=$20,  finish_time_target=$21,
-        attachment_path=$22,      attachment_name=$23,
-        distance_km=$24,          distance_label=$25,
-        race_type=$26,            category=$27,
+        registered_email=$18,    registered_phone=$19,
+        confirmation_number=$20, finish_time_target=$21,
+        attachment_path=$22,     attachment_name=$23,
+        distance_km=$24,         distance_label=$25,
+        race_type=$26,           category=$27,
         elevation_gain_req_m=$28, itra_point=$29,
-        itra_url=$30,             qualification=$31,
-        finish_time_seconds=$32,  gun_time_seconds=$33,
-        overall_place=$34,        overall_total=$35,
-        gender_place=$36,         gender_total=$37,
-        age_group_place=$38,      age_group_total=$39,
+        itra_url=$30,            qualification=$31,
+        finish_time_seconds=$32, gun_time_seconds=$33,
+        overall_place=$34,       overall_total=$35,
+        gender_place=$36,        gender_total=$37,
+        age_group_place=$38,     age_group_total=$39,
         age_group_label=$40,
-        heart_rate_avg=$41,       heart_rate_max=$42,
-        elevation_gain_m=$43,
-        weather_temp_c=$44,       weather_condition=$45,
-        notes=$46,                race_report=$47,
-        results_url=$48,          certificate_url=$49,
-        facilities=$50,
-        rpc_date_start=$51,       rpc_date_end=$52,
-        rpc_time=$53,             rpc_location=$54,
-        rpc_status=$55,
-        rpc_attachment_path=$56,  rpc_attachment_name=$57,
-        rpc_notes=$58,
-        mandatory_items=$59,
-        strava_url=$60,
-        result_file_path=$61,     result_file_name=$62,
+        heart_rate_avg=$41,      heart_rate_max=$42,
+        actual_distance_km=$43,  elevation_gain_m=$44,
+        weather_temp_c=$45,      weather_condition=$46,
+        notes=$47,               race_report=$48,
+        results_url=$49,         certificate_url=$50,
+        facilities=$51,
+        rpc_date_start=$52,      rpc_date_end=$53,
+        rpc_time=$54,            rpc_location=$55,
+        rpc_status=$56,
+        rpc_attachment_path=$57, rpc_attachment_name=$58,
+        rpc_notes=$59,
+        mandatory_items=$60,
+        strava_url=$61,
+        result_file_path=$62,    result_file_name=$63,
         updated_at=NOW()
-      WHERE id=$63 AND user_id=$64 RETURNING *`,
+      WHERE id=$64 AND user_id=$65 RETURNING *`,
       [
         b.event_name,                        // $1
         b.race_date,                         // $2
@@ -331,28 +333,29 @@ router.put('/:id', async (req, res) => {
         str(b.age_group_label),             // $40
         num(b.heart_rate_avg),              // $41
         num(b.heart_rate_max),              // $42
-        num(b.elevation_gain_m),            // $43
-        num(b.weather_temp_c),              // $44
-        str(b.weather_condition),           // $45
-        str(b.notes),                       // $46
-        str(b.race_report),                 // $47
-        str(b.results_url),                 // $48
-        str(b.certificate_url),             // $49
-        jsonArr(b.facilities),              // $50
-        str(b.rpc_date_start),              // $51
-        str(b.rpc_date_end),                // $52
-        str(b.rpc_time),                    // $53
-        str(b.rpc_location),                // $54
-        b.rpc_status || 'not_collected',    // $55
-        str(b.rpc_attachment_path),         // $56
-        str(b.rpc_attachment_name),         // $57
-        str(b.rpc_notes),                   // $58
-        jsonArr(b.mandatory_items),         // $59
-        str(b.strava_url),                  // $60
-        str(b.result_file_path),            // $61
-        str(b.result_file_name),            // $62
-        req.params.id,                      // $63
-        req.userId,                         // $64
+        num(b.actual_distance_km),          // $43
+        num(b.elevation_gain_m),            // $44
+        num(b.weather_temp_c),              // $45
+        str(b.weather_condition),           // $46
+        str(b.notes),                       // $47
+        str(b.race_report),                 // $48
+        str(b.results_url),                 // $49
+        str(b.certificate_url),             // $50
+        jsonArr(b.facilities),              // $51
+        str(b.rpc_date_start),              // $52
+        str(b.rpc_date_end),                // $53
+        str(b.rpc_time),                    // $54
+        str(b.rpc_location),                // $55
+        b.rpc_status || 'not_collected',    // $56
+        str(b.rpc_attachment_path),         // $57
+        str(b.rpc_attachment_name),         // $58
+        str(b.rpc_notes),                   // $59
+        jsonArr(b.mandatory_items),         // $60
+        str(b.strava_url),                  // $61
+        str(b.result_file_path),            // $62
+        str(b.result_file_name),            // $63
+        req.params.id,                      // $64
+        req.userId,                         // $65
       ]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });

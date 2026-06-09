@@ -19,7 +19,7 @@ const EMPTY = {
   finish_time: '', gun_time: '',
   overall_place: '', overall_total: '', gender_place: '', gender_total: '',
   age_group_place: '', age_group_total: '', age_group_label: '',
-  heart_rate_avg: '', heart_rate_max: '', elevation_gain_m: '',
+  heart_rate_avg: '', heart_rate_max: '', actual_distance_km: '', elevation_gain_m: '',
   weather_temp_c: '', weather_condition: '',
   notes: '', race_report: '', results_url: '', certificate_url: '',
   strava_url: '', result_file_path: '', result_file_name: '',
@@ -48,20 +48,69 @@ function Field({ label, children, hint }) {
 }
 
 // ── Route file uploader ───────────────────────────────────────────────────
-function RouteUploader({ filePath, fileName, userId, onChange, onClear }) {
+// ── File size validation (mirrors backend logic) ──────────────────────────
+const PDF_MAX_BYTES = 10 * 1024 * 1024;
+const ROUTE_HARD_MAX = 100 * 1024 * 1024;
+const ROUTE_BASE_BYTES = 5 * 1024 * 1024;
+
+function routeLimitBytes(distanceKm) {
+  const km = parseFloat(distanceKm);
+  if (!km || km <= 10) return ROUTE_BASE_BYTES;
+  const calculated = Math.ceil(km * 0.6 * 1024 * 1024);
+  return Math.min(calculated, ROUTE_HARD_MAX);
+}
+
+function fmtMB(bytes) {
+  return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+}
+
+function sanitiseFileName(raw) {
+  return (raw || 'upload')
+    .replace(/\0/g, '')
+    .replace(/[/\\:*?"<>|]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/\.{2,}/g, '.')
+    .slice(0, 200) || 'upload';
+}
+
+function validateRouteFile(file, distanceKm) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['fit', 'gpx', 'kml'].includes(ext)) return 'Only .fit, .gpx, .kml files are accepted';
+  const limit = routeLimitBytes(distanceKm);
+  if (file.size > limit) {
+    const km = parseFloat(distanceKm);
+    const ctx = km > 0 ? `for a ${km} km race` : 'for undefined distance';
+    return `File too large ${ctx}. Maximum: ${fmtMB(limit)}`;
+  }
+  return null;
+}
+
+function validatePdfFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext !== 'pdf') return 'Only PDF files are accepted';
+  if (file.size > PDF_MAX_BYTES) return `PDF too large. Maximum: ${fmtMB(PDF_MAX_BYTES)}`;
+  return null;
+}
+
+// ── Route file uploader (Event Info — route preview) ──────────────────────
+function RouteUploader({ filePath, fileName, userId, distanceKm, onChange, onClear }) {
   const inputRef = useRef();
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState('');
 
   const handleFile = async (e) => {
     const file = e.target.files[0]; if (!file) return;
+    const validErr = validateRouteFile(file, distanceKm);
+    if (validErr) { setErr(validErr); e.target.value = ''; return; }
     setErr(''); setUploading(true);
     try {
-      const res = await api.uploadRoute(file);
-      onChange(res.route_file_path, res.route_file_name);
+      const res = await api.uploadRoute(file, distanceKm);
+      onChange(res.route_file_path, sanitiseFileName(res.route_file_name));
     } catch (ex) { setErr(ex.message); }
     finally { setUploading(false); e.target.value = ''; }
   };
+
+  const limit = routeLimitBytes(distanceKm);
 
   if (filePath && fileName) return (
     <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:'var(--radius)' }}>
@@ -78,6 +127,250 @@ function RouteUploader({ filePath, fileName, userId, onChange, onClear }) {
       <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading}>
         <i className="ti ti-upload" /> {uploading ? 'Uploading…' : 'Upload .fit / .gpx / .kml'}
       </button>
+      <div style={{ fontSize:11, color:'var(--color-text-hint)', marginTop:3 }}>Max {fmtMB(limit)}</div>
+      {err && <div style={{ color:'var(--color-danger)', fontSize:12, marginTop:4 }}>{err}</div>}
+    </div>
+  );
+}
+
+// ── Activity file parser (client-side, no library) ────────────────────────
+// Returns { distanceKm, elevationGainM, heartRateAvg, heartRateMax } — any may be null
+async function parseActivityFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const text = ext !== 'fit' ? await file.text() : null;
+  const bytes = ext === 'fit' ? new Uint8Array(await file.arrayBuffer()) : null;
+
+  try {
+    if (ext === 'gpx') return parseGpx(text);
+    if (ext === 'kml') return parseKml(text);
+    if (ext === 'fit') return parseFit(bytes);
+  } catch { /* swallow parse errors — autofill is best-effort */ }
+  return {};
+}
+
+// Haversine distance between two lat/lon points in km
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function parseGpx(text) {
+  const dom = new DOMParser().parseFromString(text, 'application/xml');
+  const pts = [...dom.querySelectorAll('trkpt')];
+  if (!pts.length) return {};
+
+  let distKm = 0, elevGain = 0, prevEle = null, prevLat = null, prevLon = null;
+  const hrs = [];
+
+  pts.forEach(pt => {
+    const lat = parseFloat(pt.getAttribute('lat'));
+    const lon = parseFloat(pt.getAttribute('lon'));
+    const eleEl = pt.querySelector('ele');
+    const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+    const hrEl = pt.querySelector('hr, gpxtpx\\:hr');
+    if (hrEl) hrs.push(parseInt(hrEl.textContent));
+
+    if (prevLat !== null) distKm += haversineKm(prevLat, prevLon, lat, lon);
+    if (ele !== null && prevEle !== null && ele > prevEle) elevGain += ele - prevEle;
+    prevLat = lat; prevLon = lon; prevEle = ele;
+  });
+
+  // Also check heart rate in extensions (Garmin style)
+  [...dom.querySelectorAll('extensions')].forEach(ext => {
+    const hr = ext.querySelector('hr, TrackPointExtension > hr');
+    if (hr) hrs.push(parseInt(hr.textContent));
+  });
+
+  return {
+    distanceKm: distKm > 0 ? Math.round(distKm * 1000) / 1000 : null,
+    elevationGainM: elevGain > 0 ? Math.round(elevGain) : null,
+    heartRateAvg: hrs.length ? Math.round(hrs.reduce((a,b) => a+b, 0) / hrs.length) : null,
+    heartRateMax: hrs.length ? Math.max(...hrs) : null,
+  };
+}
+
+function parseKml(text) {
+  const dom = new DOMParser().parseFromString(text, 'application/xml');
+  // KML stores coords as lon,lat,ele tuples
+  const coordEl = dom.querySelector('coordinates');
+  if (!coordEl) return {};
+  const tuples = coordEl.textContent.trim().split(/\s+/).map(t => t.split(',').map(Number));
+  if (tuples.length < 2) return {};
+
+  let distKm = 0, elevGain = 0, prevEle = null, prevLat = null, prevLon = null;
+  tuples.forEach(([lon, lat, ele]) => {
+    if (isNaN(lat) || isNaN(lon)) return;
+    if (prevLat !== null) distKm += haversineKm(prevLat, prevLon, lat, lon);
+    if (!isNaN(ele) && prevEle !== null && ele > prevEle) elevGain += ele - prevEle;
+    prevLat = lat; prevLon = lon; prevEle = isNaN(ele) ? null : ele;
+  });
+
+  return {
+    distanceKm: distKm > 0 ? Math.round(distKm * 1000) / 1000 : null,
+    elevationGainM: elevGain > 0 ? Math.round(elevGain) : null,
+    heartRateAvg: null, heartRateMax: null,
+  };
+}
+
+function parseFit(bytes) {
+  // FIT is a binary format. We do a best-effort scan for known message types.
+  // FIT header: bytes 0-11. Records start at byte 12 (or header_size).
+  if (!bytes || bytes.length < 12) return {};
+  const headerSize = bytes[0];
+  const dataSize = new DataView(bytes.buffer).getUint32(4, true);
+
+  // Known FIT global message numbers we care about
+  // 20 = record (GPS point), 206 = field_description, 0 = file_id
+  // We'll scan for record messages containing distance, altitude, heart_rate
+  // This is a simplified parser — sufficient for common Garmin/Polar/Suunto files
+
+  let offset = headerSize;
+  const end = headerSize + dataSize;
+  const localMsgDefs = {}; // local msg num → field definitions
+  const hrs = [];
+  let maxDistCm = 0, totalElevGainM = 0, prevAlt = null;
+  let foundData = false;
+
+  const view = new DataView(bytes.buffer);
+
+  while (offset < end - 1) {
+    const recordHeader = bytes[offset];
+    offset++;
+
+    if (recordHeader & 0x40) {
+      // Definition message
+      const localNum = recordHeader & 0x0F;
+      offset++; // reserved
+      const isBigEndian = bytes[offset++] & 0x01;
+      const globalNum = view.getUint16(offset, !isBigEndian); offset += 2;
+      const numFields = bytes[offset++];
+      const fields = [];
+      for (let i = 0; i < numFields; i++) {
+        const fieldNum = bytes[offset++];
+        const size = bytes[offset++];
+        const baseType = bytes[offset++];
+        fields.push({ fieldNum, size, baseType });
+      }
+      localMsgDefs[localNum] = { globalNum, isBigEndian, fields };
+    } else {
+      // Data message
+      const localNum = recordHeader & 0x0F;
+      const def = localMsgDefs[localNum];
+      if (!def) break; // malformed, stop
+
+      const isRecord = def.globalNum === 20;
+      for (const field of def.fields) {
+        if (offset + field.size > end) { offset = end; break; }
+        let val = null;
+        if (field.size === 1) val = bytes[offset];
+        else if (field.size === 2) val = view.getUint16(offset, !def.isBigEndian);
+        else if (field.size === 4) val = view.getUint32(offset, !def.isBigEndian);
+        offset += field.size;
+
+        if (isRecord && val !== null) {
+          // field 6 = distance (cm scaled by 100 → m, then /1000 for km)
+          if (field.fieldNum === 6 && val !== 0xFFFFFFFF) {
+            if (val > maxDistCm) maxDistCm = val;
+            foundData = true;
+          }
+          // field 2 = altitude (m scaled: (val / 5) - 500)
+          if (field.fieldNum === 2 && val !== 0xFFFF) {
+            const alt = val / 5 - 500;
+            if (prevAlt !== null && alt > prevAlt) totalElevGainM += alt - prevAlt;
+            prevAlt = alt;
+            foundData = true;
+          }
+          // field 3 = heart_rate (bpm, uint8)
+          if (field.fieldNum === 3 && field.size === 1 && val > 0 && val < 250) {
+            hrs.push(val);
+            foundData = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (!foundData) return {};
+
+  return {
+    distanceKm: maxDistCm > 0 ? Math.round(maxDistCm / 100000 * 1000) / 1000 : null,
+    elevationGainM: totalElevGainM > 0 ? Math.round(totalElevGainM) : null,
+    heartRateAvg: hrs.length ? Math.round(hrs.reduce((a,b)=>a+b,0)/hrs.length) : null,
+    heartRateMax: hrs.length ? Math.max(...hrs) : null,
+  };
+}
+
+// ── Result file uploader with autofill ───────────────────────────────────
+function ResultFileUploader({ filePath, fileName, userId, distanceKm, onChange, onClear, onParsed }) {
+  const inputRef = useRef();
+  const [uploading, setUploading] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [parseMsg, setParseMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+
+    // Client-side validation before doing anything
+    const validErr = validateRouteFile(file, distanceKm);
+    if (validErr) { setErr(validErr); e.target.value = ''; return; }
+
+    setErr(''); setParseMsg(''); setUploading(true);
+
+    // Parse locally first (best-effort, doesn't block upload)
+    setParsing(true);
+    const parsed = await parseActivityFile(file).catch(() => ({}));
+    setParsing(false);
+
+    try {
+      const res = await api.uploadResultFile(file, distanceKm);
+      onChange(res.route_file_path, sanitiseFileName(res.route_file_name || res.result_file_name));
+
+      // Autofill parsed metrics
+      const fields = [];
+      if (parsed.distanceKm    != null) fields.push(`distance ${parsed.distanceKm} km`);
+      if (parsed.elevationGainM != null) fields.push(`elevation ${parsed.elevationGainM} m`);
+      if (parsed.heartRateAvg  != null) fields.push(`avg HR ${parsed.heartRateAvg} bpm`);
+      if (parsed.heartRateMax  != null) fields.push(`max HR ${parsed.heartRateMax} bpm`);
+
+      if (fields.length) {
+        onParsed(parsed);
+        setParseMsg(`Auto-filled: ${fields.join(' · ')}`);
+      } else {
+        setParseMsg('Uploaded — no metrics extracted from file.');
+      }
+    } catch (ex) { setErr(ex.message); }
+    finally { setUploading(false); e.target.value = ''; }
+  };
+
+  const limit = routeLimitBytes(distanceKm);
+
+  if (filePath && fileName) return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:'var(--radius)', marginBottom: parseMsg ? 6 : 0 }}>
+        <i className="ti ti-file-vector" style={{ color:'var(--color-primary)', fontSize:18, flexShrink:0 }} />
+        <span style={{ flex:1, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{fileName}</span>
+        <a href={api.resultFileUrl(userId, filePath.split('/').pop(), fileName)} download={fileName} className="btn btn-ghost btn-sm" title="Download"><i className="ti ti-download" /></a>
+        <button type="button" onClick={onClear} className="btn btn-ghost btn-sm" title="Remove"><i className="ti ti-x" /></button>
+      </div>
+      {parseMsg && (
+        <div style={{ fontSize:11, color:'var(--color-success)', display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
+          <i className="ti ti-circle-check" /> {parseMsg}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <input ref={inputRef} type="file" accept=".fit,.gpx,.kml" style={{ display:'none' }} onChange={handleFile} />
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading || parsing}>
+        <i className="ti ti-upload" /> {uploading ? 'Uploading…' : parsing ? 'Reading file…' : 'Upload .fit / .gpx / .kml'}
+      </button>
+      <div style={{ fontSize:11, color:'var(--color-text-hint)', marginTop:3 }}>Max {fmtMB(limit)} · Metrics auto-filled from file</div>
       {err && <div style={{ color:'var(--color-danger)', fontSize:12, marginTop:4 }}>{err}</div>}
     </div>
   );
@@ -93,10 +386,12 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
 
   const handleFile = async (e) => {
     const file = e.target.files[0]; if (!file) return;
+    const validErr = validatePdfFile(file);
+    if (validErr) { setErr(validErr); e.target.value = ''; return; }
     setErr(''); setUploading(true);
     try {
       const res = await api.uploadAttachment(file);
-      onChange(res.attachment_path, res.attachment_name);
+      onChange(res.attachment_path, sanitiseFileName(res.attachment_name));
     } catch (ex) { setErr(ex.message); }
     finally { setUploading(false); e.target.value = ''; }
   };
@@ -155,6 +450,7 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
       <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading}>
         <i className="ti ti-upload" /> {uploading ? 'Uploading…' : 'Upload PDF'}
       </button>
+      <div style={{ fontSize:11, color:'var(--color-text-hint)', marginTop:3 }}>Max {fmtMB(PDF_MAX_BYTES)}</div>
       {err && <div style={{ color:'var(--color-danger)', fontSize:12, marginTop:4 }}>{err}</div>}
     </div>
   );
@@ -344,6 +640,7 @@ export default function RaceFormPage() {
         age_group_place: race.age_group_place || '', age_group_total: race.age_group_total || '',
         age_group_label: race.age_group_label || '',
         heart_rate_avg: race.heart_rate_avg || '', heart_rate_max: race.heart_rate_max || '',
+        actual_distance_km: race.actual_distance_km || '',
         elevation_gain_m: race.elevation_gain_m || '',
         weather_temp_c: race.weather_temp_c || '', weather_condition: race.weather_condition || '',
         notes: race.notes || '', race_report: race.race_report || '',
@@ -448,6 +745,7 @@ export default function RaceFormPage() {
 
           <Field label="Route file (optional — .fit / .gpx / .kml)">
             <RouteUploader filePath={form.route_file_path} fileName={form.route_file_name} userId={userId}
+              distanceKm={form.distance_km}
               onChange={(path, name) => { setVal('route_file_path', path); setVal('route_file_name', name); }}
               onClear={() => { setVal('route_file_path', ''); setVal('route_file_name', ''); }} />
           </Field>
@@ -608,6 +906,9 @@ export default function RaceFormPage() {
               <Field label="Age group label"><input value={form.age_group_label} onChange={set('age_group_label')} placeholder="M40-44" /></Field>
               <Field label="Avg HR (bpm)"><input type="number" value={form.heart_rate_avg} onChange={set('heart_rate_avg')} /></Field>
               <Field label="Max HR (bpm)"><input type="number" value={form.heart_rate_max} onChange={set('heart_rate_max')} /></Field>
+              <Field label="Actual distance (km)">
+                <input type="number" value={form.actual_distance_km} onChange={set('actual_distance_km')} placeholder="42.10" step="0.001" />
+              </Field>
               <Field label="Elevation gain (m) — actual">
                 <input type="number" value={form.elevation_gain_m} onChange={set('elevation_gain_m')} placeholder="Actual on race day" />
               </Field>
@@ -628,13 +929,20 @@ export default function RaceFormPage() {
                 <input type="url" value={form.strava_url} onChange={set('strava_url')} placeholder="https://www.strava.com/activities/…" />
               </Field>
             </div>
-            <Field label="Result file (optional — .fit / .gpx / .kml)">
-              <RouteUploader
+            <Field label="Result file (optional — .fit / .gpx / .kml)" hint="Metrics will be auto-filled from the file">
+              <ResultFileUploader
                 filePath={form.result_file_path}
                 fileName={form.result_file_name}
                 userId={userId}
+                distanceKm={form.distance_km}
                 onChange={(path, name) => { setVal('result_file_path', path); setVal('result_file_name', name); }}
                 onClear={() => { setVal('result_file_path', ''); setVal('result_file_name', ''); }}
+                onParsed={parsed => {
+                  if (parsed.distanceKm    != null) setVal('actual_distance_km', String(parsed.distanceKm));
+                  if (parsed.elevationGainM != null) setVal('elevation_gain_m', String(parsed.elevationGainM));
+                  if (parsed.heartRateAvg  != null) setVal('heart_rate_avg', String(parsed.heartRateAvg));
+                  if (parsed.heartRateMax  != null) setVal('heart_rate_max', String(parsed.heartRateMax));
+                }}
               />
             </Field>
           </>)}

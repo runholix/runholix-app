@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
@@ -443,10 +443,11 @@ export default function RaceDetailPage() {
           </div>
         )}
 
-        {(race.heart_rate_avg || race.elevation_gain_m || race.weather_condition) && (
+        {(race.heart_rate_avg || race.actual_distance_km || race.elevation_gain_m || race.weather_condition) && (
           <Section title="Conditions & vitals">
             <Field label="Avg heart rate" value={fmtNum(race.heart_rate_avg, { suffix: 'bpm' })} />
             <Field label="Max heart rate" value={fmtNum(race.heart_rate_max, { suffix: 'bpm' })} />
+            <Field label="Actual distance" value={fmtNum(race.actual_distance_km, { decimals: 3, suffix: 'km' })} />
             <Field label="Elevation gain" value={fmtNum(race.elevation_gain_m, { suffix: 'm' })} />
             <Field label="Temperature" value={race.weather_temp_c != null ? `${Number(race.weather_temp_c).toLocaleString()}°C` : null} />
             <Field label="Weather" value={race.weather_condition} />

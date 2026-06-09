@@ -33,9 +33,15 @@ async function uploadFile(endpoint, file) {
 
 export const api = {
   // ── Auth ──────────────────────────────────────────────────────────────
-  register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
-  login:    (body) => request('/auth/login',    { method: 'POST', body: JSON.stringify(body) }),
-  me:       ()     => request('/auth/me'),
+  register:         (body) => request('/auth/register',          { method: 'POST', body: JSON.stringify(body) }),
+  activate:         (body) => request('/auth/activate',          { method: 'POST', body: JSON.stringify(body) }),
+  resendActivation: (body) => request('/auth/resend-activation', { method: 'POST', body: JSON.stringify(body) }),
+  login:            (body) => request('/auth/login',             { method: 'POST', body: JSON.stringify(body) }),
+  me:               ()     => request('/auth/me'),
+  updateName:         (body) => request('/auth/name',          { method: 'PUT',  body: JSON.stringify(body) }),
+  changePassword:     (body) => request('/auth/password',      { method: 'PUT',  body: JSON.stringify(body) }),
+  requestEmailChange: (body) => request('/auth/email',         { method: 'PUT',  body: JSON.stringify(body) }),
+  confirmEmail:       (body) => request('/auth/confirm-email', { method: 'POST', body: JSON.stringify(body) }),
 
   // ── Races ─────────────────────────────────────────────────────────────
   getRaces:   (params = {}) => {
@@ -63,14 +69,14 @@ export const api = {
   // POST  /api/upload/route            → { route_file_path, route_file_name }
   // GET   /api/upload/route-file/:uid/:filename?name=…&token=…  → download
   // DELETE /api/upload/route-file/:uid/:filename
-  uploadRoute: (file) => uploadFile('/upload/route', file),
+  uploadRoute: (file, distanceKm) => uploadFile(`/upload/route${distanceKm ? '?distance_km=' + encodeURIComponent(distanceKm) : ''}`, file),
   deleteRouteFile: (userId, filename) =>
     request(`/upload/route-file/${userId}/${filename}`, { method: 'DELETE' }),
   routeFileUrl: (userId, filename, name) =>
     `${BASE}/upload/route-file/${userId}/${encodeURIComponent(filename)}?name=${encodeURIComponent(name)}&token=${getToken()}`,
 
-  // Alias used by the Results section — same endpoint as route files
-  uploadResultFile: (file) => uploadFile('/upload/route', file),
+  // Alias used by the Results section — uses /result endpoint which also returns parsed stats
+  uploadResultFile: (file, distanceKm) => uploadFile(`/upload/result${distanceKm ? '?distance_km=' + encodeURIComponent(distanceKm) : ''}`, file),
   deleteResultFile: (userId, filename) =>
     request(`/upload/route-file/${userId}/${filename}`, { method: 'DELETE' }),
   resultFileUrl: (userId, filename, name) =>
@@ -80,14 +86,14 @@ export const api = {
   // POST  /api/upload/attachment            → { attachment_path, attachment_name }
   // GET   /api/upload/attachment/:uid/:filename?token=…[&download=1]  → inline / download
   // DELETE /api/upload/attachment/:uid/:filename
-  uploadAttachment:    (file)           => uploadFile('/upload/attachment', file),
+  uploadAttachment:    (file)             => uploadFile('/upload/attachment', file),
   deleteAttachment:    (userId, filename) =>
     request(`/upload/attachment/${userId}/${filename}`, { method: 'DELETE' }),
   attachmentUrl:       (userId, filename) =>
     `${BASE}/upload/attachment/${userId}/${encodeURIComponent(filename)}?token=${getToken()}`,
 
   // RPC attachment reuses the same PDF endpoint — kept as a named alias for clarity
-  uploadRpcAttachment: (file)           => uploadFile('/upload/attachment', file),
+  uploadRpcAttachment: (file)             => uploadFile('/upload/attachment', file),
   rpcAttachmentUrl:    (userId, filename) =>
     `${BASE}/upload/attachment/${userId}/${encodeURIComponent(filename)}?token=${getToken()}`,
 };

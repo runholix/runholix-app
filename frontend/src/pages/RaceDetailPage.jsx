@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';

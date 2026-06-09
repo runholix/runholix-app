@@ -247,6 +247,7 @@ router.post('/confirm-email', async (req, res) => {
            email_change_token=NULL, email_change_expires=NULL
        WHERE email_change_token=$1
          AND email_change_expires > NOW()
+         AND pending_email IS NOT NULL
        RETURNING id, email, name`,
       [token]
     );
@@ -255,5 +256,12 @@ router.post('/confirm-email', async (req, res) => {
     // Return fresh JWT with updated email
     const jwt_token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ token: jwt_token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name } });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+  } catch (err) {
+    console.error(err);
+    if (err.code === '23505') {
+      res.status(409).json({ error: 'Email already in use' });
+    } else {
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
 });

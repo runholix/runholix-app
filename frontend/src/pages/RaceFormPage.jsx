@@ -110,6 +110,16 @@ function RouteUploader({ filePath, fileName, userId, distanceKm, onChange, onCle
     finally { setUploading(false); e.target.value = ''; }
   };
 
+  const handleRemove = async () => {
+    if (!window.confirm(`Remove route file "${fileName}"? It will be deleted from the server.`)) return;
+    // Delete from backend
+    if (filePath && userId) {
+      const filename = filePath.split('/').pop();
+      api.deleteRouteFile(userId, filename).catch(() => {});
+    }
+    onClear();
+  };
+
   const limit = routeLimitBytes(distanceKm);
 
   if (filePath && fileName) return (
@@ -117,7 +127,7 @@ function RouteUploader({ filePath, fileName, userId, distanceKm, onChange, onCle
       <i className="ti ti-file-vector" style={{ color:'var(--color-primary)', fontSize:18, flexShrink:0 }} />
       <span style={{ flex:1, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{fileName}</span>
       <a href={api.routeFileUrl(userId, filePath.split('/').pop(), fileName)} download={fileName} className="btn btn-ghost btn-sm" title="Download"><i className="ti ti-download" /></a>
-      <button type="button" onClick={onClear} className="btn btn-ghost btn-sm" title="Remove"><i className="ti ti-x" /></button>
+      <button type="button" onClick={handleRemove} className="btn btn-ghost btn-sm" title="Remove"><i className="ti ti-x" /></button>
     </div>
   );
 
@@ -303,47 +313,81 @@ function parseFit(bytes) {
   };
 }
 
-// ── Result file uploader with autofill ───────────────────────────────────
+// ── Result file uploader — validate + parse + upload in parallel ─────────
 function ResultFileUploader({ filePath, fileName, userId, distanceKm, onChange, onClear, onParsed }) {
   const inputRef = useRef();
   const [uploading, setUploading] = useState(false);
-  const [parsing, setParsing] = useState(false);
   const [parseMsg, setParseMsg] = useState('');
   const [err, setErr] = useState('');
 
   const handleFile = async (e) => {
     const file = e.target.files[0]; if (!file) return;
 
-    // Client-side validation before doing anything
+    // 1. Instant client-side validation — no round-trip
     const validErr = validateRouteFile(file, distanceKm);
     if (validErr) { setErr(validErr); e.target.value = ''; return; }
 
     setErr(''); setParseMsg(''); setUploading(true);
 
-    // Parse locally first (best-effort, doesn't block upload)
-    setParsing(true);
-    const parsed = await parseActivityFile(file).catch(() => ({}));
-    setParsing(false);
+    // 2. Parse client-side AND upload to backend simultaneously
+    const [clientResult, uploadResult] = await Promise.allSettled([
+      parseActivityFile(file).catch(() => ({})),
+      api.uploadResultFile(file, distanceKm),
+    ]);
 
-    try {
-      const res = await api.uploadResultFile(file, distanceKm);
-      onChange(res.route_file_path, sanitiseFileName(res.route_file_name || res.result_file_name));
+    setUploading(false);
+    e.target.value = '';
 
-      // Autofill parsed metrics
+    if (uploadResult.status === 'rejected') {
+      setErr(uploadResult.reason?.message || 'Upload failed');
+      return;
+    }
+
+    const res = uploadResult.value;
+    const safeName = sanitiseFileName(res.route_file_name || res.result_file_name || file.name);
+    const storedPath = res.route_file_path || res.result_file_path;
+    onChange(storedPath, safeName);
+
+    // 3. Prefer client parse; fall back to backend parse for FIT files
+    let parsed = clientResult.status === 'fulfilled' ? clientResult.value : {};
+    const hasMetrics = v => v.distanceKm != null || v.elevationGainM != null
+                         || v.heartRateAvg != null || v.heartRateMax != null;
+
+    if (!hasMetrics(parsed) && storedPath && userId) {
+      try {
+        const sp = await api.parseResultFile(userId, storedPath.split('/').pop()).catch(() => null);
+        if (sp && hasMetrics({ distanceKm: sp.distance_km, elevationGainM: sp.elevation_gain_m, heartRateAvg: sp.heart_rate_avg })) {
+          parsed = {
+            distanceKm:    sp.distance_km    ?? null,
+            elevationGainM: sp.elevation_gain_m ?? null,
+            heartRateAvg:  sp.heart_rate_avg  ?? null,
+            heartRateMax:  sp.heart_rate_max  ?? null,
+          };
+        }
+      } catch { /* best-effort */ }
+    }
+
+    // 4. Autofill form fields
+    if (hasMetrics(parsed)) {
+      onParsed(parsed);
       const fields = [];
       if (parsed.distanceKm    != null) fields.push(`distance ${parsed.distanceKm} km`);
       if (parsed.elevationGainM != null) fields.push(`elevation ${parsed.elevationGainM} m`);
       if (parsed.heartRateAvg  != null) fields.push(`avg HR ${parsed.heartRateAvg} bpm`);
       if (parsed.heartRateMax  != null) fields.push(`max HR ${parsed.heartRateMax} bpm`);
+      setParseMsg(`Auto-filled: ${fields.join(' · ')}`);
+    } else {
+      setParseMsg('Uploaded · No metrics could be extracted from this file');
+    }
+  };
 
-      if (fields.length) {
-        onParsed(parsed);
-        setParseMsg(`Auto-filled: ${fields.join(' · ')}`);
-      } else {
-        setParseMsg('Uploaded — no metrics extracted from file.');
-      }
-    } catch (ex) { setErr(ex.message); }
-    finally { setUploading(false); e.target.value = ''; }
+  const handleRemove = async () => {
+    if (!window.confirm(`Remove result file "${fileName}"? It will be deleted from the server.`)) return;
+    if (filePath && userId) {
+      api.deleteResultFile(userId, filePath.split('/').pop()).catch(() => {});
+    }
+    setParseMsg('');
+    onClear();
   };
 
   const limit = routeLimitBytes(distanceKm);
@@ -354,7 +398,7 @@ function ResultFileUploader({ filePath, fileName, userId, distanceKm, onChange, 
         <i className="ti ti-file-vector" style={{ color:'var(--color-primary)', fontSize:18, flexShrink:0 }} />
         <span style={{ flex:1, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{fileName}</span>
         <a href={api.resultFileUrl(userId, filePath.split('/').pop(), fileName)} download={fileName} className="btn btn-ghost btn-sm" title="Download"><i className="ti ti-download" /></a>
-        <button type="button" onClick={onClear} className="btn btn-ghost btn-sm" title="Remove"><i className="ti ti-x" /></button>
+        <button type="button" onClick={handleRemove} className="btn btn-ghost btn-sm" title="Remove"><i className="ti ti-x" /></button>
       </div>
       {parseMsg && (
         <div style={{ fontSize:11, color:'var(--color-success)', display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
@@ -367,8 +411,8 @@ function ResultFileUploader({ filePath, fileName, userId, distanceKm, onChange, 
   return (
     <div>
       <input ref={inputRef} type="file" accept=".fit,.gpx,.kml" style={{ display:'none' }} onChange={handleFile} />
-      <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading || parsing}>
-        <i className="ti ti-upload" /> {uploading ? 'Uploading…' : parsing ? 'Reading file…' : 'Upload .fit / .gpx / .kml'}
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading}>
+        <i className="ti ti-upload" /> {uploading ? 'Uploading & parsing…' : 'Upload .fit / .gpx / .kml'}
       </button>
       <div style={{ fontSize:11, color:'var(--color-text-hint)', marginTop:3 }}>Max {fmtMB(limit)} · Metrics auto-filled from file</div>
       {err && <div style={{ color:'var(--color-danger)', fontSize:12, marginTop:4 }}>{err}</div>}
@@ -396,6 +440,16 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
     finally { setUploading(false); e.target.value = ''; }
   };
 
+  const handleRemove = async () => {
+    if (!window.confirm(`Remove "${fileName}"? It will be deleted from the server.`)) return;
+    if (filePath && userId) {
+      api.deleteAttachment(userId, filePath.split('/').pop()).catch(() => {});
+    }
+    setViewing(false);
+    setFullscreen(false);
+    onClear();
+  };
+
   if (filePath && fileName) {
     const url = api.attachmentUrl(userId, filePath.split('/').pop());
     const downloadUrl = url + '&download=1';
@@ -418,7 +472,7 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
           <a href={downloadUrl} download={fileName} className="btn btn-ghost btn-sm" title="Download">
             <i className="ti ti-download" />
           </a>
-          <button type="button" onClick={onClear} className="btn btn-ghost btn-sm" title="Remove">
+          <button type="button" onClick={handleRemove} className="btn btn-ghost btn-sm" title="Remove">
             <i className="ti ti-x" />
           </button>
         </div>
@@ -608,6 +662,7 @@ export default function RaceFormPage() {
   const navigate = useNavigate();
   const isEdit = !!id;
   const [form, setForm] = useState(EMPTY);
+  const [dirty, setDirty] = useState(false);
   const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -660,8 +715,14 @@ export default function RaceFormPage() {
     }).finally(() => setLoading(false));
   }, [id]);
 
-  const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
-  const setVal = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  const set = (key) => (e) => { setForm(f => ({ ...f, [key]: e.target.value })); setDirty(true); };
+  const setVal = (key, val) => { setForm(f => ({ ...f, [key]: val })); setDirty(true); };
+
+  const handleCancel = (e) => {
+    if (dirty && !window.confirm('You have unsaved changes. Discard and leave?')) {
+      e.preventDefault();
+    }
+  };
 
   const isTrail = form.race_type === 'trail';
 
@@ -671,6 +732,7 @@ export default function RaceFormPage() {
     setError(''); setSaving(true);
     try {
       const race = isEdit ? await api.updateRace(id, form) : await api.createRace(form);
+      setDirty(false);
       navigate(`/races/${race.id}`);
     } catch (err) { setError(err.message); setSaving(false); }
   };
@@ -962,7 +1024,7 @@ export default function RaceFormPage() {
 
           {/* ── ACTIONS ────────────────────────────────────────────── */}
           <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:24, paddingTop:20, borderTop:'1px solid var(--color-border)', flexWrap:'wrap' }}>
-            <Link to={isEdit ? `/races/${id}` : '/races'} className="btn btn-secondary">Cancel</Link>
+            <Link to={isEdit ? `/races/${id}` : '/races'} className="btn btn-secondary" onClick={handleCancel}>Cancel</Link>
             <button type="submit" className="btn btn-primary" disabled={saving}>
               <i className={`ti ${saving ? 'ti-loader' : 'ti-check'}`} />
               {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add race'}

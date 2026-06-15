@@ -43,6 +43,10 @@ export const api = {
   requestEmailChange: (body) => request('/auth/email',         { method: 'PUT',  body: JSON.stringify(body) }),
   confirmEmail:       (body) => request('/auth/confirm-email', { method: 'POST', body: JSON.stringify(body) }),
 
+  // ── iCal calendar feed ───────────────────────────────────────────────────
+  getIcal:        ()     => request('/auth/ical'),
+  toggleIcal:     (body) => request('/auth/ical', { method: 'PUT', body: JSON.stringify(body) }),
+
   // ── Races ─────────────────────────────────────────────────────────────
   getRaces:   (params = {}) => {
     const q = new URLSearchParams(params).toString();
@@ -75,12 +79,15 @@ export const api = {
   routeFileUrl: (userId, filename, name) =>
     `${BASE}/upload/route-file/${userId}/${encodeURIComponent(filename)}?name=${encodeURIComponent(name)}&token=${getToken()}`,
 
-  // Alias used by the Results section — uses /result endpoint which also returns parsed stats
-  uploadResultFile: (file, distanceKm) => uploadFile(`/upload/result${distanceKm ? '?distance_km=' + encodeURIComponent(distanceKm) : ''}`, file),
+  // Alias used by the Results section — same /route endpoint, same file types
+  uploadResultFile: (file, distanceKm) => uploadFile(`/upload/route${distanceKm ? '?distance_km=' + encodeURIComponent(distanceKm) : ''}`, file),
   deleteResultFile: (userId, filename) =>
     request(`/upload/route-file/${userId}/${filename}`, { method: 'DELETE' }),
   resultFileUrl: (userId, filename, name) =>
     `${BASE}/upload/route-file/${userId}/${encodeURIComponent(filename)}?name=${encodeURIComponent(name)}&token=${getToken()}`,
+  // Backend fallback parser — server-side GPX/FIT/KML parse when client parse yields nothing
+  parseResultFile: (userId, filename) =>
+    request(`/upload/parse/${userId}/${encodeURIComponent(filename)}`),
 
   // ── PDF attachments (registration + race pack collection) ─────────────
   // POST  /api/upload/attachment            → { attachment_path, attachment_name }
@@ -96,4 +103,12 @@ export const api = {
   uploadRpcAttachment: (file)             => uploadFile('/upload/attachment', file),
   rpcAttachmentUrl:    (userId, filename) =>
     `${BASE}/upload/attachment/${userId}/${encodeURIComponent(filename)}?token=${getToken()}`,
+
+  // ── Avatar ────────────────────────────────────────────────────────────────
+  // POST /api/upload/avatar  — accepts JPG/PNG (HEIC converted before send)
+  // DELETE /api/upload/avatar
+  // GET  /api/upload/avatar/:userId  — public, no token needed
+  uploadAvatar:  (file) => uploadFile('/upload/avatar', file),
+  deleteAvatar:  ()     => request('/upload/avatar', { method: 'DELETE' }),
+  avatarUrl:     (userId) => `${BASE}/upload/avatar/${encodeURIComponent(userId)}`,
 };

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
 import { ThemeProvider } from './hooks/useTheme.jsx';
 import Layout from './components/Layout.jsx';
@@ -15,8 +15,13 @@ import CalendarPage from './pages/CalendarPage.jsx';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div style={{ display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--color-text-muted)' }}>Loading…</div>;
-  return user ? children : <Navigate to="/login" replace />;
+  if (!user) {
+    const intended = location.pathname + location.search;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(intended)}`} replace />;
+  }
+  return children;
 }
 
 function PublicRoute({ children }) {

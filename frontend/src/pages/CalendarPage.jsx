@@ -161,7 +161,13 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+  const [dirty, setDirty] = useState(false);
+  const set = k => e => { setForm(f => ({ ...f, [k]: e.target.value })); setDirty(true); };
+
+  const confirmClose = () => {
+    if (dirty && !window.confirm('You have unsaved changes. Discard and close?')) return;
+    onClose();
+  };
 
   const filteredRaces = races.filter(r =>
     r.event_name.toLowerCase().includes(search.toLowerCase())
@@ -182,12 +188,12 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-      onClick={e => e.target === e.currentTarget && onClose()}
+      onClick={e => e.target === e.currentTarget && confirmClose()}
     >
       <div className="card" style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 16, fontWeight: 600 }}>{plan?.id ? 'Edit training plan' : 'Add training plan'}</h2>
-          <button onClick={onClose} className="btn btn-ghost btn-sm"><i className="ti ti-x" /></button>
+          <button onClick={confirmClose} className="btn btn-ghost btn-sm"><i className="ti ti-x" /></button>
         </div>
         {error && <div className="alert-error">{error}</div>}
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -209,7 +215,7 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
             <label className="form-label">Related race (optional)</label>
             <input
               value={search}
-              onChange={e => { setSearch(e.target.value); if (!e.target.value) setForm(f => ({ ...f, race_id: '' })); }}
+              onChange={e => { setSearch(e.target.value); if (!e.target.value) { setForm(f => ({ ...f, race_id: '' })); setDirty(true); } }}
               placeholder="Search races…"
               style={{ marginBottom: 4 }}
             />
@@ -224,7 +230,7 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
                 {filteredRaces.map(r => (
                   <div
                     key={r.id}
-                    onClick={() => { setForm(f => ({ ...f, race_id: r.id })); setSearch(r.event_name); }}
+                    onClick={() => { setForm(f => ({ ...f, race_id: r.id })); setSearch(r.event_name); setDirty(true); }}
                     style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', background: form.race_id === r.id ? 'var(--color-primary-bg)' : '', color: form.race_id === r.id ? 'var(--color-primary)' : '' }}
                     onMouseEnter={e => { if (form.race_id !== r.id) e.currentTarget.style.background = 'var(--color-bg)'; }}
                     onMouseLeave={e => { if (form.race_id !== r.id) e.currentTarget.style.background = ''; }}
@@ -249,7 +255,7 @@ function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
             <textarea value={form.notes} onChange={set('notes')} rows={3} placeholder="Details, targets, gear…" style={{ resize: 'vertical' }} />
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--color-border)' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+            <button type="button" onClick={confirmClose} className="btn btn-secondary">Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
               <i className={`ti ${saving ? 'ti-loader' : 'ti-check'}`} />
               {saving ? 'Saving…' : plan?.id ? 'Save changes' : 'Add plan'}

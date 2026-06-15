@@ -115,7 +115,11 @@ export default function Layout() {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => {
+    if (!window.confirm('Sign out of Race Tracker?')) return;
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="layout-shell">

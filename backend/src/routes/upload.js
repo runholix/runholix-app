@@ -3,6 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import sharp from 'sharp';
+import pool from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -223,6 +225,171 @@ router.delete('/attachment/:userId/:filename', requireAuth, (req, res) => {
   } catch {
     res.status(500).json({ error: 'Could not delete file' });
   }
+});
+
+// ── GET /api/upload/parse/:userId/:filename ───────────────────────────────
+// Server-side fallback parser for GPX/KML files stored on disk.
+// Called when client-side parse yields no metrics (e.g. large FIT files that
+// the browser's ArrayBuffer limit can't handle, or complex GPX extensions).
+router.get('/parse/:userId/:filename', requireAuth, async (req, res) => {
+  if (req.params.userId !== req.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const filePath = safeFilePath(req.params.userId, req.params.filename);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+
+  const ext = path.extname(filePath).toLowerCase();
+  if (!['.gpx', '.kml'].includes(ext)) {
+    // FIT is binary — server-side parse would need a library; return empty for now
+    return res.json({ distance_km: null, elevation_gain_m: null, heart_rate_avg: null, heart_rate_max: null });
+  }
+
+  try {
+    const text = fs.readFileSync(filePath, 'utf8');
+    let result = {};
+
+    if (ext === '.gpx') {
+      // Parse GPX with regex (no DOM in Node without jsdom)
+      const trkpts = [...text.matchAll(/<trkpt[^>]+lat="([^"]+)"[^>]+lon="([^"]+)"/g)];
+      const eles = [...text.matchAll(/<ele>([^<]+)<\/ele>/g)].map(m => parseFloat(m[1]));
+      const hrs  = [...text.matchAll(/<(?:gpxtpx:hr|hr)>(\d+)<\/(?:gpxtpx:hr|hr)>/g)].map(m => parseInt(m[1]));
+
+      let distKm = 0, elevGain = 0;
+      for (let i = 1; i < trkpts.length; i++) {
+        const [lat1, lon1] = [parseFloat(trkpts[i-1][1]), parseFloat(trkpts[i-1][2])];
+        const [lat2, lon2] = [parseFloat(trkpts[i][1]),   parseFloat(trkpts[i][2])];
+        const R = 6371;
+        const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+        distKm += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        if (eles[i] != null && eles[i-1] != null && eles[i] > eles[i-1]) elevGain += eles[i] - eles[i-1];
+      }
+      result = {
+        distance_km:    distKm > 0 ? Math.round(distKm * 1000) / 1000 : null,
+        elevation_gain_m: elevGain > 0 ? Math.round(elevGain) : null,
+        heart_rate_avg: hrs.length ? Math.round(hrs.reduce((a,b)=>a+b,0)/hrs.length) : null,
+        heart_rate_max: hrs.length ? Math.max(...hrs) : null,
+      };
+    } else if (ext === '.kml') {
+      const coordMatch = text.match(/<coordinates>([\s\S]*?)<\/coordinates>/);
+      if (coordMatch) {
+        const tuples = coordMatch[1].trim().split(/\s+/).map(t => t.split(',').map(Number));
+        let distKm = 0, elevGain = 0, prevLon = null, prevLat = null, prevEle = null;
+        for (const [lon, lat, ele] of tuples) {
+          if (!isNaN(lat) && !isNaN(lon)) {
+            if (prevLat !== null) {
+              const R = 6371;
+              const dLat = (lat-prevLat)*Math.PI/180, dLon = (lon-prevLon)*Math.PI/180;
+              const a = Math.sin(dLat/2)**2 + Math.cos(prevLat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLon/2)**2;
+              distKm += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            }
+            if (!isNaN(ele) && prevEle !== null && ele > prevEle) elevGain += ele - prevEle;
+            prevLat = lat; prevLon = lon; prevEle = isNaN(ele) ? null : ele;
+          }
+        }
+        result = {
+          distance_km:    distKm > 0 ? Math.round(distKm * 1000) / 1000 : null,
+          elevation_gain_m: elevGain > 0 ? Math.round(elevGain) : null,
+          heart_rate_avg: null, heart_rate_max: null,
+        };
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('[parse]', err.message);
+    res.json({ distance_km: null, elevation_gain_m: null, heart_rate_avg: null, heart_rate_max: null });
+  }
+});
+
+// ── Avatar upload — crop 1:1, resize to max 512px, compress ─────────────
+
+const AVATAR_MAX_BYTES = 10 * 1024 * 1024; // 10 MB input limit
+
+function avatarFileFilter(_req, file, cb) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const mime = file.mimetype;
+  const allowed = ['.jpg', '.jpeg', '.png'];
+  const allowedMime = ['image/jpeg', 'image/png', 'image/jpg'];
+  if (allowed.includes(ext) && allowedMime.includes(mime)) return cb(null, true);
+  cb(new Error('Only JPG/JPEG/PNG images are accepted for avatars'));
+}
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(), // process in memory with sharp
+  fileFilter: avatarFileFilter,
+  limits: { fileSize: AVATAR_MAX_BYTES },
+});
+
+// POST /api/upload/avatar
+// Accepts JPG/PNG, crops to 1:1, resizes to ≤512px, saves to /uploads/avatars/<userId>.jpg
+// Replaces (and deletes) any existing avatar file for this user
+router.post('/avatar', requireAuth, avatarUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const avatarDir = path.join(UPLOAD_DIR, 'avatars');
+  ensureDir(avatarDir);
+
+  // Fixed output path: always <userId>.jpg (replaces previous automatically)
+  const outFilename = `${req.userId}.jpg`;
+  const outPath = path.join(avatarDir, outFilename);
+
+  // Delete old file if it exists (it'll be overwritten, but also delete any old .png)
+  const oldPng = path.join(avatarDir, `${req.userId}.png`);
+  try { if (fs.existsSync(oldPng)) fs.unlinkSync(oldPng); } catch {}
+
+  try {
+    const img = sharp(req.file.buffer);
+    const meta = await img.metadata();
+    const size = Math.min(meta.width, meta.height);
+
+    await img
+      .extract({         // centre crop to 1:1
+        left:   Math.floor((meta.width  - size) / 2),
+        top:    Math.floor((meta.height - size) / 2),
+        width:  size,
+        height: size,
+      })
+      .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85, progressive: true })
+      .toFile(outPath);
+
+    // Store relative avatar path in DB
+    const avatarPath = `/avatars/${outFilename}`;
+    await pool.query('UPDATE users SET avatar_path=$1 WHERE id=$2', [avatarPath, req.userId]);
+
+    res.json({ avatar_path: avatarPath });
+  } catch (err) {
+    console.error('[avatar]', err.message);
+    res.status(500).json({ error: 'Image processing failed' });
+  }
+});
+
+// DELETE /api/upload/avatar — remove avatar
+router.delete('/avatar', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'UPDATE users SET avatar_path=NULL WHERE id=$1 RETURNING avatar_path',
+      [req.userId]
+    );
+    const oldPath = rows[0]?.avatar_path;
+    if (oldPath) {
+      const full = path.join(UPLOAD_DIR, oldPath);
+      try { if (fs.existsSync(full)) fs.unlinkSync(full); } catch {}
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/upload/avatar/:userId — serve avatar (public, no auth needed for display)
+router.get('/avatar/:userId', (req, res) => {
+  const filename = sanitiseOriginalName(`${req.params.userId}.jpg`);
+  const filePath = path.join(UPLOAD_DIR, 'avatars', filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'No avatar' });
+  res.setHeader('Content-Type', 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=300'); // 5-min cache
+  res.sendFile(path.resolve(filePath));
 });
 
 export default router;

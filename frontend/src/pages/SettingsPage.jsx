@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { api } from '../lib/api.js';
 
@@ -28,6 +28,168 @@ function Alert({ type, message }) {
       <i className={`ti ${s.icon}`} style={{ flexShrink: 0, marginTop: 1 }} />
       <span>{message}</span>
     </div>
+  );
+}
+
+// ── HEIC → JPEG conversion via canvas ────────────────────────────────────
+async function heicToJpeg(file) {
+  // Load heic2any lazily via dynamic import (CDN fallback: draw on canvas)
+  // We use the createImageBitmap approach which works for HEIC in some browsers,
+  // otherwise fall back to drawing via an img element with object URL.
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(blob => {
+        URL.revokeObjectURL(url);
+        if (!blob) return reject(new Error('HEIC conversion failed'));
+        resolve(new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.92);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load HEIC image')); };
+    img.src = url;
+  });
+}
+
+const AVATAR_MAX_MB = 10;
+const AVATAR_MAX_BYTES = AVATAR_MAX_MB * 1024 * 1024;
+const AVATAR_ACCEPT = '.jpg,.jpeg,.png,.heic,.HEIC';
+
+// ── Avatar Section ─────────────────────────────────────────────────────────
+function AvatarSection({ user, onUpdate }) {
+  const inputRef = useRef();
+  const [preview, setPreview]   = useState(null); // local blob preview
+  const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving]   = useState(false);
+  const [result, setResult]       = useState(null);
+
+  const currentAvatarUrl = user?.avatar_path
+    ? api.avatarUrl(user.id) + '?v=' + Date.now() // bust cache after update
+    : null;
+
+  const displayUrl = preview || (user?.avatar_path ? api.avatarUrl(user.id) : null);
+
+  const handleFile = async (e) => {
+    let file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setResult(null);
+
+    // HEIC conversion
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'heic') {
+      try {
+        file = await heicToJpeg(file);
+      } catch {
+        return setResult({ type: 'error', message: 'Could not convert HEIC image. Please export as JPG/PNG from your device.' });
+      }
+    }
+
+    // Validate type
+    const allowedExt = ['jpg', 'jpeg', 'png'];
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    if (!allowedExt.includes(fileExt)) {
+      return setResult({ type: 'error', message: 'Only JPG, JPEG, PNG and HEIC files are accepted.' });
+    }
+
+    // Validate size
+    if (file.size > AVATAR_MAX_BYTES) {
+      return setResult({ type: 'error', message: `Image too large. Maximum size is ${AVATAR_MAX_MB} MB.` });
+    }
+
+    // Local preview
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+
+    // Upload
+    setUploading(true);
+    try {
+      const res = await api.uploadAvatar(file);
+      onUpdate({ avatar_path: res.avatar_path });
+      setResult({ type: 'success', message: 'Avatar updated successfully.' });
+    } catch (err) {
+      setPreview(null);
+      setResult({ type: 'error', message: err.message });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!window.confirm('Remove your avatar photo?')) return;
+    setRemoving(true); setResult(null);
+    try {
+      await api.deleteAvatar();
+      setPreview(null);
+      onUpdate({ avatar_path: null });
+      setResult({ type: 'success', message: 'Avatar removed.' });
+    } catch (err) {
+      setResult({ type: 'error', message: err.message });
+    } finally { setRemoving(false); }
+  };
+
+  const initials = (user?.name || '?').charAt(0).toUpperCase();
+
+  return (
+    <Section title="Profile photo" description="JPG, PNG or HEIC · Max 10 MB · Cropped to square, 512 × 512 px">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+        {/* Avatar preview */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          {displayUrl ? (
+            <img
+              src={displayUrl}
+              alt="Avatar"
+              style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-border)' }}
+            />
+          ) : (
+            <div style={{
+              width: 80, height: 80, borderRadius: '50%',
+              background: 'var(--color-primary-bg)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--color-primary)', fontWeight: 700, fontSize: 28,
+              border: '2px solid var(--color-border)',
+            }}>{initials}</div>
+          )}
+          {uploading && (
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: '50%',
+              background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <i className="ti ti-loader" style={{ color: '#fff', fontSize: 24 }} />
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input ref={inputRef} type="file" accept={AVATAR_ACCEPT} style={{ display: 'none' }} onChange={handleFile} />
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => inputRef.current.click()}
+            disabled={uploading || removing}
+          >
+            <i className="ti ti-upload" /> {uploading ? 'Uploading…' : user?.avatar_path ? 'Change photo' : 'Upload photo'}
+          </button>
+          {(user?.avatar_path || preview) && (
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={handleRemove}
+              disabled={uploading || removing}
+            >
+              <i className="ti ti-trash" /> {removing ? 'Removing…' : 'Remove photo'}
+            </button>
+          )}
+        </div>
+      </div>
+      <Alert {...(result || {})} />
+    </Section>
   );
 }
 
@@ -191,15 +353,142 @@ function PasswordSection() {
   );
 }
 
+// ── Calendar feed section ─────────────────────────────────────────────────
+function CalendarFeedSection() {
+  const [enabled, setEnabled] = useState(false);
+  const [feedUrl, setFeedUrl] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    api.getIcal().then(data => {
+      setEnabled(data.ical_enabled);
+      setFeedUrl(data.feed_url || '');
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const toggle = async () => {
+    setSaving(true); setResult(null);
+    try {
+      const data = await api.toggleIcal({ action: enabled ? 'disable' : 'enable' });
+      setEnabled(data.ical_enabled);
+      setFeedUrl(data.feed_url || '');
+      setResult({ type: 'success', message: data.ical_enabled ? 'Calendar feed enabled.' : 'Calendar feed disabled.' });
+    } catch (err) {
+      setResult({ type: 'error', message: err.message });
+    } finally { setSaving(false); }
+  };
+
+  const regenerate = async () => {
+    if (!window.confirm('Regenerate the calendar URL? Your current subscription link will stop working and you will need to re-add the new URL to your calendar app.')) return;
+    setSaving(true); setResult(null);
+    try {
+      const data = await api.toggleIcal({ action: 'regenerate' });
+      setEnabled(true);
+      setFeedUrl(data.feed_url || '');
+      setResult({ type: 'success', message: 'New calendar URL generated.' });
+    } catch (err) {
+      setResult({ type: 'error', message: err.message });
+    } finally { setSaving(false); }
+  };
+
+  const copy = () => {
+    navigator.clipboard.writeText(feedUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  if (loading) return null;
+
+  return (
+    <Section
+      title="Calendar feed"
+      description="Subscribe to your races, RPC dates and training plans in any calendar app (Apple Calendar, Google Calendar, Outlook, etc.)"
+    >
+      {/* Toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontWeight: 500, fontSize: 14 }}>iCal / WebCal subscription</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+            {enabled ? 'Your calendar feed is active.' : 'Enable to get a subscription URL.'}
+          </div>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={saving}
+          className={`btn btn-sm ${enabled ? 'btn-secondary' : 'btn-primary'}`}
+        >
+          <i className={`ti ${enabled ? 'ti-player-stop' : 'ti-player-play'}`} />
+          {saving ? 'Saving…' : enabled ? 'Disable feed' : 'Enable feed'}
+        </button>
+      </div>
+
+      {/* Feed URL */}
+      {enabled && feedUrl && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+            Subscription URL
+          </div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 10px',
+            background: 'var(--color-bg)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius)',
+          }}>
+            <code style={{ flex: 1, fontSize: 11, wordBreak: 'break-all', color: 'var(--color-text-muted)', overflow: 'hidden' }}>
+              {feedUrl}
+            </code>
+            <button onClick={copy} className="btn btn-ghost btn-sm" title="Copy URL" style={{ flexShrink: 0 }}>
+              <i className={`ti ${copied ? 'ti-check' : 'ti-copy'}`} style={{ color: copied ? 'var(--color-success)' : undefined }} />
+            </button>
+          </div>
+
+          {/* Quick-add links */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <a
+              href={`webcal://${feedUrl.replace(/^https?:\/\//, '')}`}
+              className="btn btn-secondary btn-sm"
+              title="Subscribe in Apple Calendar or compatible apps"
+            >
+              <i className="ti ti-calendar-plus" /> Subscribe (webcal)
+            </a>
+            <a
+              href={`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(feedUrl.replace(/^https?/, 'webcal'))}`}
+              target="_blank" rel="noreferrer"
+              className="btn btn-secondary btn-sm"
+            >
+              <i className="ti ti-brand-google" /> Add to Google
+            </a>
+          </div>
+
+          {/* Regenerate */}
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--color-border)' }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+              If you suspect your URL has been shared, regenerate a new one. Your existing subscriptions will need to be updated.
+            </div>
+            <button onClick={regenerate} className="btn btn-secondary btn-sm" disabled={saving}>
+              <i className="ti ti-refresh" /> Regenerate URL
+            </button>
+          </div>
+        </div>
+      )}
+
+      <Alert {...(result || {})} />
+    </Section>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [currentUser, setCurrentUser] = useState(user);
 
-  const handleNameUpdate = updated => {
-    setCurrentUser(u => ({ ...u, name: updated.name }));
-    // Also refresh the auth context user so sidebar name updates
-    localStorage.setItem('rt_user_name', updated.name);
+  const handleUpdate = (patch) => {
+    setCurrentUser(u => ({ ...u, ...patch }));
   };
 
   return (
@@ -209,9 +498,11 @@ export default function SettingsPage() {
         <p className="page-subtitle">Manage your profile and security settings.</p>
       </div>
 
-      <NameSection user={currentUser} onUpdate={handleNameUpdate} />
-      <EmailSection user={currentUser} />
+      <AvatarSection   user={currentUser} onUpdate={handleUpdate} />
+      <NameSection     user={currentUser} onUpdate={u => handleUpdate({ name: u.name })} />
+      <EmailSection    user={currentUser} />
       <PasswordSection />
+      <CalendarFeedSection />
     </div>
   );
 }

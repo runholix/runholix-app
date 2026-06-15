@@ -1,16 +1,49 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api.js';
 
-function usePageSize() {
+// ── Page size with cross-breakpoint page recalculation ────────────────────
+function usePageSize(page, setPage) {
   const [size, setSize] = useState(() => window.innerWidth < 768 ? 5 : 10);
+  const prevSizeRef = useRef(size);
+
   useEffect(() => {
-    const handler = () => setSize(window.innerWidth < 768 ? 5 : 10);
+    const handler = () => {
+      const newSize = window.innerWidth < 768 ? 5 : 10;
+      if (newSize === prevSizeRef.current) return;
+
+      setPage(prevPage => {
+        let newPage;
+        if (prevSizeRef.current === 5 && newSize === 10) {
+          // mobile → desktop: formula (page + page % 2) / 2
+          newPage = Math.floor((prevPage + (prevPage % 2)) / 2);
+        } else {
+          // desktop → mobile: formula (page * 2) - 1
+          newPage = prevPage * 2 - 1;
+        }
+        return Math.max(1, newPage);
+      });
+
+      prevSizeRef.current = newSize;
+      setSize(newSize);
+    };
+
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
-  }, []);
+  }, [setPage]);
+
   return size;
+}
+
+// ── Session state persistence ─────────────────────────────────────────────
+const SESSION_KEY = 'races_list_state';
+
+function saveListState(state) {
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(state)); } catch {}
+}
+function loadListState() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; }
 }
 
 function fmtTime(sec) {
@@ -28,10 +61,10 @@ const STATUS_META = {
 };
 
 /* Mobile card */
-function RaceCard({ r }) {
+function RaceCard({ r, listState }) {
   const sm = STATUS_META[r.status] || {};
   return (
-    <Link to={`/races/${r.id}`} style={{ display: 'block', color: 'inherit' }}>
+    <Link to={`/races/${r.id}`} state={{ fromRaces: listState }} style={{ display: 'block', color: 'inherit' }}>
       <div className="card" style={{ padding: '14px 16px', marginBottom: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
           <div style={{ fontWeight: 500, fontSize: 14, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -63,12 +96,9 @@ function Pagination({ page, totalPages, total, pageSize, onChange }) {
   const from = (page - 1) * pageSize + 1;
   const to   = Math.min(page * pageSize, total);
 
-  // Build page numbers: always show first, last, current ±1, with ellipsis
   const pages = [];
   const add = n => { if (n >= 1 && n <= totalPages && !pages.includes(n)) pages.push(n); };
-  add(1);
-  add(page - 1); add(page); add(page + 1);
-  add(totalPages);
+  add(1); add(page - 1); add(page); add(page + 1); add(totalPages);
   pages.sort((a, b) => a - b);
 
   const withGaps = [];
@@ -83,43 +113,23 @@ function Pagination({ page, totalPages, total, pageSize, onChange }) {
         Showing {from}–{to} of {total} races
       </div>
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        <button
-          onClick={() => onChange(page - 1)}
-          disabled={page === 1}
-          className="btn btn-ghost btn-sm"
-          style={{ padding: '5px 8px' }}
-        >
+        <button onClick={() => onChange(page - 1)} disabled={page === 1} className="btn btn-ghost btn-sm" style={{ padding: '5px 8px' }}>
           <i className="ti ti-chevron-left" />
         </button>
-
         {withGaps.map((p, i) =>
           p === '…' ? (
             <span key={`gap-${i}`} style={{ padding: '5px 4px', fontSize: 13, color: 'var(--color-text-hint)' }}>…</span>
           ) : (
-            <button
-              key={p}
-              onClick={() => onChange(p)}
-              className="btn btn-sm"
-              style={{
-                padding: '5px 10px',
-                minWidth: 34,
-                background: p === page ? 'var(--color-primary)' : 'var(--color-surface)',
-                color: p === page ? '#fff' : 'var(--color-text)',
-                border: `1px solid ${p === page ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                fontWeight: p === page ? 600 : 400,
-              }}
-            >
-              {p}
-            </button>
+            <button key={p} onClick={() => onChange(p)} className="btn btn-sm" style={{
+              padding: '5px 10px', minWidth: 34,
+              background: p === page ? 'var(--color-primary)' : 'var(--color-surface)',
+              color: p === page ? '#fff' : 'var(--color-text)',
+              border: `1px solid ${p === page ? 'var(--color-primary)' : 'var(--color-border)'}`,
+              fontWeight: p === page ? 600 : 400,
+            }}>{p}</button>
           )
         )}
-
-        <button
-          onClick={() => onChange(page + 1)}
-          disabled={page === totalPages}
-          className="btn btn-ghost btn-sm"
-          style={{ padding: '5px 8px' }}
-        >
+        <button onClick={() => onChange(page + 1)} disabled={page === totalPages} className="btn btn-ghost btn-sm" style={{ padding: '5px 8px' }}>
           <i className="ti ti-chevron-right" />
         </button>
       </div>
@@ -128,11 +138,26 @@ function Pagination({ page, totalPages, total, pageSize, onChange }) {
 }
 
 export default function RacesPage() {
-  const pageSize = usePageSize();
-  const [races, setRaces] = useState([]);
+  const location = useLocation();
+
+  // ── Restore state from sessionStorage (back navigation) or location.state ─
+  const restoredState = (() => {
+    // location.state is set when navigating back from detail page
+    if (location.state?.restorePage) return location.state;
+    return loadListState();
+  })();
+
+  const [races, setRaces]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ status: '', year: '', search: '' });
-  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState(restoredState?.filters || { status: '', year: '', search: '' });
+  const [page, setPage]     = useState(restoredState?.page || 1);
+
+  const pageSize = usePageSize(page, setPage);
+
+  // ── Persist list state to sessionStorage on every change ─────────────────
+  useEffect(() => {
+    saveListState({ filters, page });
+  }, [filters, page]);
 
   const load = async () => {
     setLoading(true);
@@ -145,13 +170,34 @@ export default function RacesPage() {
     setLoading(false);
   };
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); load(); }, [filters]);
+  // Reset to page 1 whenever filters change (but not on initial mount)
+  const isFirstMount = useRef(true);
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      load();
+      return;
+    }
+    setPage(1);
+    load();
+  }, [filters]);
+
+  // ── After races load, if restoring by raceId, find its page ──────────────
+  useEffect(() => {
+    if (!restoredState?.scrollToRaceId || !races.length) return;
+    const idx = races.findIndex(r => r.id === restoredState.scrollToRaceId);
+    if (idx === -1) return;
+    const targetPage = Math.floor(idx / pageSize) + 1;
+    setPage(targetPage);
+  }, [races]);
 
   const years = [...new Set(races.map(r => r.race_date?.slice(0, 4)).filter(Boolean))].sort().reverse();
 
   const totalPages = Math.ceil(races.length / pageSize);
   const paged = races.slice((page - 1) * pageSize, page * pageSize);
+
+  // State passed to each race link so detail page can pass it back
+  const listState = { filters, page, scrollToRaceId: null };
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
@@ -201,7 +247,7 @@ export default function RacesPage() {
         <>
           {/* Mobile card list */}
           <div className="mobile-only">
-            {paged.map(r => <RaceCard key={r.id} r={r} />)}
+            {paged.map(r => <RaceCard key={r.id} r={r} listState={{ ...listState, scrollToRaceId: r.id }} />)}
             <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={pageSize} onChange={setPage} />
           </div>
 
@@ -220,12 +266,19 @@ export default function RacesPage() {
                   <tbody>
                     {paged.map(r => {
                       const sm = STATUS_META[r.status] || {};
+                      const raceListState = { ...listState, scrollToRaceId: r.id };
                       return (
                         <tr key={r.id}
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg)'}
                           onMouseLeave={e => e.currentTarget.style.background = ''}>
                           <td>
-                            <Link to={`/races/${r.id}`} style={{ fontWeight: 500, color: 'var(--color-primary)' }}>{r.event_name}</Link>
+                            <Link
+                              to={`/races/${r.id}`}
+                              state={{ fromRaces: raceListState }}
+                              style={{ fontWeight: 500, color: 'var(--color-primary)' }}
+                            >
+                              {r.event_name}
+                            </Link>
                             {r.city && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{r.city}{r.country ? `, ${r.country}` : ''}</div>}
                           </td>
                           <td style={{ whiteSpace: 'nowrap' }}>{r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'}</td>

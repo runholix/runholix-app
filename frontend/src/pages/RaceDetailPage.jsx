@@ -147,6 +147,7 @@ export default function RaceDetailPage() {
   const location = useLocation();
   const { user } = useAuth();
   const fromCalendar = location.state?.from === 'calendar';
+  const fromRaces = location.state?.fromRaces; // { filters, page } from RacesPage
   const [race, setRace] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -171,6 +172,10 @@ export default function RaceDetailPage() {
     <div className="page" style={{ maxWidth: 900 }}>
       <Link
         to={fromCalendar ? '/calendar' : '/races'}
+        state={fromCalendar
+          ? undefined
+          : { ...fromRaces, restorePage: true, scrollToRaceId: id }
+        }
         style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16 }}
       >
         <i className="ti ti-arrow-left" /> {fromCalendar ? 'Back to calendar' : 'Back to races'}

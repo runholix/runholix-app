@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.js';
 import racesRoutes from './routes/races.js';
 import uploadRoutes from './routes/upload.js';
 import trainingRoutes from './routes/training.js';
+import icalRoutes from './routes/ical.js';
 import { startScheduler } from './scheduler.js';
 
 dotenv.config();
@@ -25,6 +26,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/races', racesRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/training', trainingRoutes);
+app.use('/ical', icalRoutes);
 
 async function startWithMigration() {
   const client = await pool.connect();
@@ -37,15 +39,24 @@ async function startWithMigration() {
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         name TEXT NOT NULL,
+        avatar_path TEXT,
         is_active BOOLEAN NOT NULL DEFAULT FALSE,
         activation_token TEXT,
         activation_expires TIMESTAMPTZ,
+        pending_approval BOOLEAN NOT NULL DEFAULT FALSE,
+        approval_token TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
       -- Idempotent: add new columns to existing installs
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_path TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_approval BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS ical_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS ical_token TEXT;
+      UPDATE users SET ical_enabled = FALSE WHERE ical_enabled IS NULL;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_expires TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_token TEXT;
@@ -132,6 +143,7 @@ async function startWithMigration() {
       );
 
       -- Idempotent additions for existing installs
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_path TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS flag_off_time      TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS cutoff_time        TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS route_file_path    TEXT;

@@ -137,3 +137,78 @@ export async function sendEmailChangeConfirmation(to, name, token) {
     <p style="font-size:12px;color:#9b9890">Or copy: ${link}</p>
   `));
 }
+
+// ── Admin approval request ───────────────────────────────────────────────
+export async function sendAdminApprovalRequest(adminEmail, user, approveUrl, rejectUrl) {
+  await send(adminEmail, `New user awaiting approval: ${user.name}`, wrap('New account approval required', `
+    <p>A new user has confirmed their email address and is awaiting your approval to access Race Tracker.</p>
+    <div class="info">
+      <p><strong>Name:</strong> ${user.name}</p>
+      <p><strong>Email:</strong> ${user.email}</p>
+    </div>
+    <p>Please review and take action:</p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="padding:0 8px 0 0">
+          <a href="${approveUrl}" class="btn" style="background:#15803d;display:block;text-align:center">✓ Approve account</a>
+        </td>
+        <td style="padding:0 0 0 8px">
+          <a href="${rejectUrl}" class="btn" style="background:#dc2626;display:block;text-align:center">✗ Reject &amp; delete</a>
+        </td>
+      </tr>
+    </table>
+    <p style="font-size:12px;color:#9b9890;margin-top:16px">Approve: ${approveUrl}<br>Reject: ${rejectUrl}</p>
+  `));
+}
+
+// ── User approved notification ────────────────────────────────────────────
+export async function sendAccountApproved(to, name) {
+  const link = `${APP_URL}/login`;
+  await send(to, 'Your Race Tracker account has been approved!', wrap('Account approved 🎉', `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>Great news — an admin has approved your Race Tracker account. You can now sign in and start tracking your races!</p>
+    <a href="${link}" class="btn">Sign in now</a>
+    <p style="font-size:12px;color:#9b9890">If you did not register for Race Tracker, you can ignore this email.</p>
+  `));
+}
+
+// ── RPC details missing reminder ─────────────────────────────────────────
+export async function sendFillRpcReminder(to, name, race, daysUntil) {
+  const link = `${APP_URL}/races/${race.id}`;
+  const subject = `Reminder: Add race pack collection details for ${race.event_name} (${daysUntil} days away)`;
+  await send(to, subject, wrap('Race pack collection details missing', `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>Your race <strong>${race.event_name}</strong> is only <strong>${daysUntil} day${daysUntil !== 1 ? 's' : ''} away</strong> 
+       on <strong>${fmtDate(race.race_date)}</strong>, but you haven't filled in the race pack collection details yet.</p>
+    <p>Make sure you know when and where to collect your race pack so you're ready on race day!</p>
+    <a href="${link}" class="btn">Fill in RPC details →</a>
+    <div class="info">
+      <p><strong>Race:</strong> ${race.event_name}</p>
+      <p><strong>Race date:</strong> ${fmtDate(race.race_date)}</p>
+      ${race.city ? `<p><strong>Location:</strong> ${race.city}${race.country ? ', ' + race.country : ''}</p>` : ''}
+      ${race.distance_label || race.distance_km ? `<p><strong>Distance:</strong> ${race.distance_label || race.distance_km + ' km'}</p>` : ''}
+    </div>
+    <p style="font-size:12px;color:#9b9890">You're receiving this because you have a race registered in Race Tracker.</p>
+  `));
+}
+
+// ── Fill race results reminder ────────────────────────────────────────────
+export async function sendFillResultsReminder(to, name, race) {
+  const link = `${APP_URL}/races/${race.id}`;
+  const subject = `How did ${race.event_name} go? Fill in your results!`;
+  await send(to, subject, wrap('Fill in your race results 🏅', `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>It's been 3 days since <strong>${race.event_name}</strong> on <strong>${fmtDate(race.race_date)}</strong>. 
+       How did it go? Your race status is still showing as <em>${race.status}</em>.</p>
+    <p>Head over to Race Tracker to log your finish time, placement, and write up your race report while the memories are fresh!</p>
+    <a href="${link}" class="btn">Fill in race results →</a>
+    <div class="info">
+      <p><strong>Race:</strong> ${race.event_name}</p>
+      <p><strong>Race date:</strong> ${fmtDate(race.race_date)}</p>
+      ${race.city ? `<p><strong>Location:</strong> ${race.city}${race.country ? ', ' + race.country : ''}</p>` : ''}
+      ${race.distance_label || race.distance_km ? `<p><strong>Distance:</strong> ${race.distance_label || race.distance_km + ' km'}</p>` : ''}
+      ${race.bib_number ? `<p><strong>Bib:</strong> #${race.bib_number}</p>` : ''}
+    </div>
+    <p style="font-size:12px;color:#9b9890">You're receiving this because you have a race registered in Race Tracker.</p>
+  `));
+}

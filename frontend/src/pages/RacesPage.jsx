@@ -15,7 +15,7 @@ function usePageSize(page, setPage) {
 
       setPage(prevPage => {
         let newPage;
-        if (prevSizeRef.current === 5 && newSize === 10) {
+        if (newSize === 10) {
           // mobile → desktop: formula (page + page % 2) / 2
           newPage = Math.floor((prevPage + (prevPage % 2)) / 2);
         } else {

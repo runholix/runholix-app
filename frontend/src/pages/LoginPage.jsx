@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
+import APP_NAME from '../lib/appName.js';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -40,7 +41,7 @@ export default function LoginPage() {
             <i className="ti ti-run" />
           </div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 16 }}>Race Tracker</div>
+            <div style={{ fontWeight: 600, fontSize: 16 }}>{APP_NAME}</div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Sign in to your account</div>
           </div>
         </div>

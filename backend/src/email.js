@@ -19,8 +19,9 @@ function createTransport() {
 }
 
 const transport = createTransport();
-const FROM    = process.env.SMTP_FROM || 'Race Tracker <noreply@example.com>';
+const FROM    = process.env.SMTP_FROM || `${APP_NAME} <noreply@example.com>`;
 const APP_URL = (process.env.APP_URL || 'http://localhost').replace(/\/$/, '');
+const APP_NAME = process.env.APP_NAME || 'Runholix';
 
 export const emailEnabled = !!transport;
 
@@ -53,7 +54,7 @@ p{font-size:14px;line-height:1.6;color:#4b4a48;margin:0 0 12px}
 footer{text-align:center;font-size:12px;color:#9b9890;margin-top:24px}
 </style></head>
 <body><div class="card"><h1>🏃 ${title}</h1>${body}</div>
-<footer>Race Tracker · <a href="${APP_URL}" style="color:#1d4ed8">${APP_URL}</a></footer>
+<footer>${APP_NAME} · <a href="${APP_URL}" style="color:#1d4ed8">${APP_URL}</a></footer>
 </body></html>`;
 }
 
@@ -66,9 +67,9 @@ function fmtDate(d) {
 
 export async function sendActivationEmail(to, name, token) {
   const link = `${APP_URL}/activate?token=${encodeURIComponent(token)}`;
-  await send(to, 'Activate your Race Tracker account', wrap('Activate your account', `
+  await send(to, `Activate your ${APP_NAME} account`, wrap('Activate your account', `
     <p>Hi <strong>${name}</strong>,</p>
-    <p>Thanks for signing up to Race Tracker! Click below to activate your account.</p>
+    <p>Thanks for signing up to ${APP_NAME}! Click below to activate your account.</p>
     <a href="${link}" class="btn">Activate my account</a>
     <p style="font-size:12px;color:#9b9890">Link expires in 24 hours. If you did not sign up, ignore this email.</p>
     <p style="font-size:12px;color:#9b9890">Or copy: ${link}</p>
@@ -76,10 +77,10 @@ export async function sendActivationEmail(to, name, token) {
 }
 
 export async function sendWelcomeEmail(to, name) {
-  await send(to, 'Welcome to Race Tracker!', wrap('Welcome to Race Tracker! 🎉', `
+  await send(to, `Welcome to ${APP_NAME}!`, wrap(`Welcome to ${APP_NAME}! 🎉`, `
     <p>Hi <strong>${name}</strong>, your account is now active.</p>
     <p>Start adding your races and training plans!</p>
-    <a href="${APP_URL}" class="btn">Go to Race Tracker</a>
+    <a href="${APP_URL}" class="btn">Go to ${APP_NAME}</a>
   `));
 }
 
@@ -117,11 +118,11 @@ export async function sendRpcReminder(to, name, race) {
 
 // ── Password changed notification ─────────────────────────────────────────
 export async function sendPasswordChangedEmail(to, name) {
-  await send(to, 'Your Race Tracker password was changed', wrap('Password changed', `
+  await send(to, `Your ${APP_NAME} password was changed`, wrap('Password changed', `
     <p>Hi <strong>${name}</strong>,</p>
-    <p>Your Race Tracker password was successfully changed.</p>
+    <p>Your ${APP_NAME} password was successfully changed.</p>
     <p>If you did not make this change, please contact support immediately and change your password.</p>
-    <a href="${APP_URL}" class="btn">Go to Race Tracker</a>
+    <a href="${APP_URL}" class="btn">Go to ${APP_NAME}</a>
   `));
 }
 
@@ -130,7 +131,7 @@ export async function sendEmailChangeConfirmation(to, name, token) {
   const link = `${APP_URL}/confirm-email?token=${encodeURIComponent(token)}`;
   await send(to, 'Confirm your new email address', wrap('Confirm new email address', `
     <p>Hi <strong>${name}</strong>,</p>
-    <p>You requested to change your Race Tracker email address to <strong>${to}</strong>.</p>
+    <p>You requested to change your ${APP_NAME} email address to <strong>${to}</strong>.</p>
     <p>Click below to confirm this change. The link expires in 24 hours.</p>
     <a href="${link}" class="btn">Confirm new email</a>
     <p style="font-size:12px;color:#9b9890">If you did not request this, ignore this email. Your current email will remain unchanged.</p>
@@ -141,7 +142,7 @@ export async function sendEmailChangeConfirmation(to, name, token) {
 // ── Admin approval request ───────────────────────────────────────────────
 export async function sendAdminApprovalRequest(adminEmail, user, approveUrl, rejectUrl) {
   await send(adminEmail, `New user awaiting approval: ${user.name}`, wrap('New account approval required', `
-    <p>A new user has confirmed their email address and is awaiting your approval to access Race Tracker.</p>
+    <p>A new user has confirmed their email address and is awaiting your approval to access ${APP_NAME}.</p>
     <div class="info">
       <p><strong>Name:</strong> ${user.name}</p>
       <p><strong>Email:</strong> ${user.email}</p>
@@ -164,11 +165,11 @@ export async function sendAdminApprovalRequest(adminEmail, user, approveUrl, rej
 // ── User approved notification ────────────────────────────────────────────
 export async function sendAccountApproved(to, name) {
   const link = `${APP_URL}/login`;
-  await send(to, 'Your Race Tracker account has been approved!', wrap('Account approved 🎉', `
+  await send(to, `Your ${APP_NAME} account has been approved!`, wrap('Account approved 🎉', `
     <p>Hi <strong>${name}</strong>,</p>
-    <p>Great news — an admin has approved your Race Tracker account. You can now sign in and start tracking your races!</p>
+    <p>Great news — an admin has approved your ${APP_NAME} account. You can now sign in and start tracking your races!</p>
     <a href="${link}" class="btn">Sign in now</a>
-    <p style="font-size:12px;color:#9b9890">If you did not register for Race Tracker, you can ignore this email.</p>
+    <p style="font-size:12px;color:#9b9890">If you did not register for ${APP_NAME}, you can ignore this email.</p>
   `));
 }
 
@@ -188,7 +189,7 @@ export async function sendFillRpcReminder(to, name, race, daysUntil) {
       ${race.city ? `<p><strong>Location:</strong> ${race.city}${race.country ? ', ' + race.country : ''}</p>` : ''}
       ${race.distance_label || race.distance_km ? `<p><strong>Distance:</strong> ${race.distance_label || race.distance_km + ' km'}</p>` : ''}
     </div>
-    <p style="font-size:12px;color:#9b9890">You're receiving this because you have a race registered in Race Tracker.</p>
+    <p style="font-size:12px;color:#9b9890">You're receiving this because you have a race registered in ${APP_NAME}.</p>
   `));
 }
 
@@ -200,7 +201,7 @@ export async function sendFillResultsReminder(to, name, race) {
     <p>Hi <strong>${name}</strong>,</p>
     <p>It's been 3 days since <strong>${race.event_name}</strong> on <strong>${fmtDate(race.race_date)}</strong>. 
        How did it go? Your race status is still showing as <em>${race.status}</em>.</p>
-    <p>Head over to Race Tracker to log your finish time, placement, and write up your race report while the memories are fresh!</p>
+    <p>Head over to ${APP_NAME} to log your finish time, placement, and write up your race report while the memories are fresh!</p>
     <a href="${link}" class="btn">Fill in race results →</a>
     <div class="info">
       <p><strong>Race:</strong> ${race.event_name}</p>
@@ -209,6 +210,6 @@ export async function sendFillResultsReminder(to, name, race) {
       ${race.distance_label || race.distance_km ? `<p><strong>Distance:</strong> ${race.distance_label || race.distance_km + ' km'}</p>` : ''}
       ${race.bib_number ? `<p><strong>Bib:</strong> #${race.bib_number}</p>` : ''}
     </div>
-    <p style="font-size:12px;color:#9b9890">You're receiving this because you have a race registered in Race Tracker.</p>
+    <p style="font-size:12px;color:#9b9890">You're receiving this because you have a race registered in ${APP_NAME}.</p>
   `));
 }

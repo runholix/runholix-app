@@ -55,7 +55,7 @@ function buildIcs(userId, userName, races, training) {
   cal += prop('PRODID', esc(prodId));
   cal += prop('CALSCALE', 'GREGORIAN');
   cal += prop('METHOD', 'PUBLISH');
-  cal += prop('X-WR-CALNAME', esc(`${userName}'s Race Tracker`));
+  cal += prop('X-WR-CALNAME', esc(`${userName}'s ${process.env.APP_NAME || 'Runholix'}`));
   cal += prop('X-WR-CALDESC', 'Races, race pack collection dates, and training plans');
   cal += prop('X-WR-TIMEZONE', 'UTC');
   cal += prop('REFRESH-INTERVAL;VALUE=DURATION', 'PT1H');
@@ -65,7 +65,7 @@ function buildIcs(userId, userName, races, training) {
   for (const r of races) {
     if (!r.race_date) continue;
 
-    const uid = `race-${r.id}@racetracker`;
+    const uid = `race-${r.id}@runholix`;
     const startDate = toIcsDate(r.race_date.slice(0, 10));
 
     // All-day event for the race date
@@ -168,15 +168,21 @@ router.get('/:token.ics', async (req, res) => {
 
     const { id: userId, name } = users[0];
 
-    // Fetch all races
+    // Fetch all races — cast date columns to text so .slice() is safe
     const { rows: races } = await pool.query(
-      `SELECT * FROM races WHERE user_id = $1 ORDER BY race_date DESC`,
+      `SELECT *,
+         race_date::text        AS race_date,
+         rpc_date_start::text   AS rpc_date_start,
+         rpc_date_end::text     AS rpc_date_end
+       FROM races WHERE user_id = $1 ORDER BY race_date DESC`,
       [userId]
     );
 
-    // Fetch all training plans (with race name)
+    // Fetch all training plans (with race name) — cast date to text
     const { rows: training } = await pool.query(
-      `SELECT t.*, r.event_name AS race_name
+      `SELECT t.*,
+         t.plan_date::text      AS plan_date,
+         r.event_name           AS race_name
        FROM training_plans t
        LEFT JOIN races r ON r.id = t.race_id AND r.user_id = t.user_id
        WHERE t.user_id = $1 ORDER BY t.plan_date`,

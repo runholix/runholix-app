@@ -1,16 +1,16 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: race-tracker-db
+    container_name: runholix-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-racetracker}
+      POSTGRES_USER: ${POSTGRES_USER:-runholix}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: ${POSTGRES_DB:-racetracker}
+      POSTGRES_DB: ${POSTGRES_DB:-runholix}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-racetracker}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-runholix}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -19,17 +19,28 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: race-tracker-api
+    container_name: runholix-api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
+      APP_NAME: ${APP_NAME:-Runholix}
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-racetracker}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-racetracker}
+      DATABASE_URL: postgres://${POSTGRES_USER:-runholix}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-runholix}
       JWT_SECRET: ${JWT_SECRET:-supersecretchangeme}
       PORT: 3001
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       UPLOAD_DIR: /uploads
+      # App public URL (used in email links)
+      APP_URL: ${APP_URL:-http://localhost}
+      # SMTP — leave blank to disable email
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-tls}   # plain | tls | ssl
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@example.com}
     expose:
       - "3001"
     volumes:
@@ -41,7 +52,8 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-/api}
-    container_name: race-tracker-web
+        VITE_APP_NAME: ${APP_NAME:-Runholix}
+    container_name: runholix-web
     restart: unless-stopped
     depends_on:
       - backend

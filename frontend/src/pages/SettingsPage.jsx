@@ -365,7 +365,13 @@ function CalendarFeedSection() {
   useEffect(() => {
     api.getIcal().then(data => {
       setEnabled(data.ical_enabled);
-      setFeedUrl(data.feed_url || '');
+      // feed_url may be relative (e.g. /ical/token.ics) if APP_URL not set
+      const url = data.feed_url
+        ? data.feed_url.startsWith('http')
+          ? data.feed_url
+          : `${window.location.origin}${data.feed_url}`
+        : '';
+      setFeedUrl(url);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -374,7 +380,12 @@ function CalendarFeedSection() {
     try {
       const data = await api.toggleIcal({ action: enabled ? 'disable' : 'enable' });
       setEnabled(data.ical_enabled);
-      setFeedUrl(data.feed_url || '');
+      const url = data.feed_url
+        ? data.feed_url.startsWith('http')
+          ? data.feed_url
+          : `${window.location.origin}${data.feed_url}`
+        : '';
+      setFeedUrl(url);
       setResult({ type: 'success', message: data.ical_enabled ? 'Calendar feed enabled.' : 'Calendar feed disabled.' });
     } catch (err) {
       setResult({ type: 'error', message: err.message });
@@ -387,7 +398,12 @@ function CalendarFeedSection() {
     try {
       const data = await api.toggleIcal({ action: 'regenerate' });
       setEnabled(true);
-      setFeedUrl(data.feed_url || '');
+      const url = data.feed_url
+        ? data.feed_url.startsWith('http')
+          ? data.feed_url
+          : `${window.location.origin}${data.feed_url}`
+        : '';
+      setFeedUrl(url);
       setResult({ type: 'success', message: 'New calendar URL generated.' });
     } catch (err) {
       setResult({ type: 'error', message: err.message });

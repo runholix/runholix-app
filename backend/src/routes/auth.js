@@ -136,7 +136,7 @@ router.get('/admin-approve', async (req, res) => {
       return res.send(`
         <html><body style="font-family:sans-serif;padding:40px;max-width:480px;margin:auto">
           <h2 style="color:#15803d">✓ Account approved</h2>
-          <p><strong>${rows[0].name}</strong> (${rows[0].email}) can now sign in to Race Tracker.</p>
+          <p><strong>${rows[0].name}</strong> (${rows[0].email}) can now sign in to ${process.env.APP_NAME || 'Runholix'}.</p>
           <p style="color:#6b6860;font-size:13px">An approval notification has been sent to the user.</p>
         </body></html>
       `);

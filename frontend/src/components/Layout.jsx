@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import APP_NAME from '../lib/appName.js';
 import ThemeToggle from './ThemeToggle.jsx';
 
 const nav = [
@@ -29,7 +30,7 @@ function SidebarContent({ user, onLogout, onClose }) {
             }}>
               <i className="ti ti-run" />
             </div>
-            <span style={{ fontWeight: 600, fontSize: 15 }}>Race Tracker</span>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>{APP_NAME}</span>
           </div>
           {onClose && (
             <button onClick={onClose} className="btn btn-ghost" style={{ padding: 4 }} aria-label="Close menu">
@@ -116,7 +117,7 @@ export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleLogout = () => {
-    if (!window.confirm('Sign out of Race Tracker?')) return;
+    if (!window.confirm(`Sign out of ${APP_NAME}?`)) return;
     logout();
     navigate('/login');
   };
@@ -151,7 +152,7 @@ export default function Layout() {
             }}>
               <i className="ti ti-run" />
             </div>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Race Tracker</span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{APP_NAME}</span>
           </div>
           {/* Compact icon-only toggle in topbar */}
           <ThemeToggle compact={true} />

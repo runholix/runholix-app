@@ -174,7 +174,7 @@ router.get('/:token.ics', async (req, res) => {
          race_date::text        AS race_date,
          rpc_date_start::text   AS rpc_date_start,
          rpc_date_end::text     AS rpc_date_end
-       FROM races WHERE user_id = $1 ORDER BY race_date DESC`,
+       FROM races WHERE user_id = $1 ORDER BY races.race_date DESC`,
       [userId]
     );
 

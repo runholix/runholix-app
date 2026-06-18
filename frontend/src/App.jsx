@@ -48,6 +48,7 @@ export default function App() {
             <Route path="races/:id/edit" element={<RaceFormPage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>

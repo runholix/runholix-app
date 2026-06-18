@@ -202,114 +202,290 @@ function parseGpx(text) {
   };
 }
 
-function parseKml(text) {
-  const dom = new DOMParser().parseFromString(text, 'application/xml');
-  // KML stores coords as lon,lat,ele tuples
-  const coordEl = dom.querySelector('coordinates');
-  if (!coordEl) return {};
-  const tuples = coordEl.textContent.trim().split(/\s+/).map(t => t.split(',').map(Number));
-  if (tuples.length < 2) return {};
-
-  let distKm = 0, elevGain = 0, prevEle = null, prevLat = null, prevLon = null;
-  tuples.forEach(([lon, lat, ele]) => {
-    if (isNaN(lat) || isNaN(lon)) return;
-    if (prevLat !== null) distKm += haversineKm(prevLat, prevLon, lat, lon);
-    if (!isNaN(ele) && prevEle !== null && ele > prevEle) elevGain += ele - prevEle;
-    prevLat = lat; prevLon = lon; prevEle = isNaN(ele) ? null : ele;
-  });
-
-  return {
-    distanceKm: distKm > 0 ? Math.round(distKm * 1000) / 1000 : null,
-    elevationGainM: elevGain > 0 ? Math.round(elevGain) : null,
-    heartRateAvg: null, heartRateMax: null,
-  };
-}
-
+// Intervented with other AI
 function parseFit(bytes) {
-  // FIT is a binary format. We do a best-effort scan for known message types.
-  // FIT header: bytes 0-11. Records start at byte 12 (or header_size).
   if (!bytes || bytes.length < 12) return {};
-  const headerSize = bytes[0];
-  const dataSize = new DataView(bytes.buffer).getUint32(4, true);
 
-  // Known FIT global message numbers we care about
-  // 20 = record (GPS point), 206 = field_description, 0 = file_id
-  // We'll scan for record messages containing distance, altitude, heart_rate
-  // This is a simplified parser — sufficient for common Garmin/Polar/Suunto files
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const headerSize = bytes[0]; // usually 12 or 14
 
-  let offset = headerSize;
+  if (headerSize < 12 || bytes.length < headerSize) return {};
+
+  const dataSize = view.getUint32(4, true); // FIT header is little-endian
   const end = headerSize + dataSize;
-  const localMsgDefs = {}; // local msg num → field definitions
-  const hrs = [];
-  let maxDistCm = 0, totalElevGainM = 0, prevAlt = null;
+
+  if (bytes.length < end) return {}; // truncated file
+
+  const localMsgDefs = {};
+
+  const recordHrs = [];
+  const lapAvgHrs = [];
+  const lapMaxHrs = [];
+
+  let recordMaxDistRaw = 0; // record.distance: field 5, uint32, scale 100, metres
+  let recordElevGainRaw = 0; // altitude raw units, scale 5
+  let prevAltRaw = null;
+
+  let sessionDistanceRaw = null; // session.total_distance: field 9, uint32, scale 100, metres
+  let sessionElevationGainM = null; // session.total_ascent: field 22, uint16, metres
+  let sessionAvgHr = null; // session.avg_heart_rate: field 16, uint8
+  let sessionMaxHr = null; // session.max_heart_rate: field 17, uint8
+
+  let lapDistanceRawTotal = 0; // lap.total_distance: field 9, uint32, scale 100, metres
+  let lapElevationGainMTotal = 0; // lap.total_ascent: field 21, uint16, metres
+
   let foundData = false;
+  let offset = headerSize;
 
-  const view = new DataView(bytes.buffer);
+  function isValidUint8(value) {
+    return value !== null && value !== 0xFF;
+  }
 
-  while (offset < end - 1) {
-    const recordHeader = bytes[offset];
-    offset++;
+  function isValidUint16(value) {
+    return value !== null && value !== 0xFFFF;
+  }
 
-    if (recordHeader & 0x40) {
-      // Definition message
-      const localNum = recordHeader & 0x0F;
-      offset++; // reserved
-      const isBigEndian = bytes[offset++] & 0x01;
-      const globalNum = view.getUint16(offset, !isBigEndian); offset += 2;
-      const numFields = bytes[offset++];
-      const fields = [];
-      for (let i = 0; i < numFields; i++) {
-        const fieldNum = bytes[offset++];
-        const size = bytes[offset++];
-        const baseType = bytes[offset++];
-        fields.push({ fieldNum, size, baseType });
+  function isValidUint32(value) {
+    return value !== null && value !== 0xFFFFFFFF;
+  }
+
+  function readFieldValue(field, isBigEndian) {
+    if (offset + field.size > end) {
+      offset = end;
+      return null;
+    }
+
+    let value = null;
+
+    // This intentionally supports only the simple scalar field sizes needed
+    // by distance, altitude, ascent, and heart-rate fields.
+    if (field.size === 1) {
+      value = view.getUint8(offset);
+    } else if (field.size === 2) {
+      value = view.getUint16(offset, !isBigEndian);
+    } else if (field.size === 4) {
+      value = view.getUint32(offset, !isBigEndian);
+    }
+
+    offset += field.size;
+    return value;
+  }
+
+  function parseDataMessage(def) {
+    const globalNum = def.globalNum;
+
+    for (const field of def.fields) {
+      const value = readFieldValue(field, def.isBigEndian);
+      if (value === null) continue;
+
+      const isSession = globalNum === 18;
+      const isLap = globalNum === 19;
+      const isRecord = globalNum === 20;
+
+      if (isSession) {
+        // session.total_distance — field 9, uint32, scale 100, unit m
+        if (field.fieldNum === 9 && field.size === 4 && isValidUint32(value)) {
+          sessionDistanceRaw = value;
+          foundData = true;
+        }
+
+        // session.avg_heart_rate — field 16, uint8, bpm
+        if (field.fieldNum === 16 && field.size === 1 && isValidUint8(value) && value > 0) {
+          sessionAvgHr = value;
+          foundData = true;
+        }
+
+        // session.max_heart_rate — field 17, uint8, bpm
+        if (field.fieldNum === 17 && field.size === 1 && isValidUint8(value) && value > 0) {
+          sessionMaxHr = value;
+          foundData = true;
+        }
+
+        // session.total_ascent — field 22, uint16, metres
+        if (field.fieldNum === 22 && field.size === 2 && isValidUint16(value)) {
+          sessionElevationGainM = value;
+          foundData = true;
+        }
       }
-      localMsgDefs[localNum] = { globalNum, isBigEndian, fields };
-    } else {
-      // Data message
-      const localNum = recordHeader & 0x0F;
-      const def = localMsgDefs[localNum];
-      if (!def) break; // malformed, stop
 
-      const isRecord = def.globalNum === 20;
-      for (const field of def.fields) {
-        if (offset + field.size > end) { offset = end; break; }
-        let val = null;
-        if (field.size === 1) val = bytes[offset];
-        else if (field.size === 2) val = view.getUint16(offset, !def.isBigEndian);
-        else if (field.size === 4) val = view.getUint32(offset, !def.isBigEndian);
-        offset += field.size;
+      if (isLap) {
+        // lap.total_distance — field 9, uint32, scale 100, unit m
+        if (field.fieldNum === 9 && field.size === 4 && isValidUint32(value)) {
+          lapDistanceRawTotal += value;
+          foundData = true;
+        }
 
-        if (isRecord && val !== null) {
-          // field 6 = distance (cm scaled by 100 → m, then /1000 for km)
-          if (field.fieldNum === 6 && val !== 0xFFFFFFFF) {
-            if (val > maxDistCm) maxDistCm = val;
+        // lap.avg_heart_rate — field 15, uint8, bpm
+        if (field.fieldNum === 15 && field.size === 1 && isValidUint8(value) && value > 0) {
+          lapAvgHrs.push(value);
+          foundData = true;
+        }
+
+        // lap.max_heart_rate — field 16, uint8, bpm
+        if (field.fieldNum === 16 && field.size === 1 && isValidUint8(value) && value > 0) {
+          lapMaxHrs.push(value);
+          foundData = true;
+        }
+
+        // lap.total_ascent — field 21, uint16, metres
+        if (field.fieldNum === 21 && field.size === 2 && isValidUint16(value)) {
+          lapElevationGainMTotal += value;
+          foundData = true;
+        }
+      }
+
+      if (isRecord) {
+        // record.distance — field 5, uint32, scale 100, unit m
+        // Your previous code used field 6; in the standard FIT profile,
+        // field 6 is speed, while distance is field 5.
+        if (field.fieldNum === 5 && field.size === 4 && isValidUint32(value)) {
+          if (value > recordMaxDistRaw) recordMaxDistRaw = value;
+          foundData = true;
+        }
+
+        // record.altitude — field 2, uint16, scale 5, offset 500, unit m
+        if (field.fieldNum === 2 && field.size === 2 && isValidUint16(value)) {
+          const altitudeM = value / 5 - 500;
+
+          if (altitudeM > -500 && altitudeM < 9000) {
+            if (prevAltRaw !== null) {
+              const gainRaw = value - prevAltRaw;
+              if (gainRaw > 0) recordElevGainRaw += gainRaw;
+            }
+
+            prevAltRaw = value;
             foundData = true;
           }
-          // field 2 = altitude (m scaled: (val / 5) - 500)
-          if (field.fieldNum === 2 && val !== 0xFFFF) {
-            const alt = val / 5 - 500;
-            if (prevAlt !== null && alt > prevAlt) totalElevGainM += alt - prevAlt;
-            prevAlt = alt;
-            foundData = true;
-          }
-          // field 3 = heart_rate (bpm, uint8)
-          if (field.fieldNum === 3 && field.size === 1 && val > 0 && val < 250) {
-            hrs.push(val);
-            foundData = true;
-          }
+        }
+
+        // record.heart_rate — field 3, uint8, bpm
+        if (field.fieldNum === 3 && field.size === 1 && isValidUint8(value) && value > 0) {
+          recordHrs.push(value);
+          foundData = true;
         }
       }
     }
   }
 
+  while (offset < end) {
+    if (offset >= bytes.length) break;
+
+    const recordHeader = bytes[offset++];
+
+    const isCompressedTimestamp = (recordHeader & 0x80) !== 0;
+
+    if (isCompressedTimestamp) {
+      // Compressed timestamp header:
+      // local message number is stored in bits 6-5.
+      // This is still a data message, so parse it instead of skipping it.
+      const localNum = (recordHeader >> 5) & 0x03;
+      const def = localMsgDefs[localNum];
+
+      if (!def) break;
+
+      parseDataMessage(def);
+      continue;
+    }
+
+    const isDefinition = (recordHeader & 0x40) !== 0;
+    const hasDevFields = (recordHeader & 0x20) !== 0;
+    const localNum = recordHeader & 0x0F;
+
+    if (isDefinition) {
+      if (offset + 5 > end) break;
+
+      offset++; // reserved byte
+
+      const arch = bytes[offset++]; // 0 = little-endian, 1 = big-endian
+      const isBigEndian = arch === 1;
+
+      const globalNum = view.getUint16(offset, !isBigEndian);
+      offset += 2;
+
+      const numFields = bytes[offset++];
+
+      const fields = [];
+
+      for (let i = 0; i < numFields; i++) {
+        if (offset + 3 > end) break;
+
+        const fieldNum = bytes[offset++];
+        const size = bytes[offset++];
+        const baseType = bytes[offset++];
+
+        fields.push({ fieldNum, size, baseType });
+      }
+
+      if (hasDevFields && offset < end) {
+        const numDevFields = bytes[offset++];
+
+        for (let i = 0; i < numDevFields; i++) {
+          if (offset + 3 > end) break;
+
+          // developer field definition:
+          // field_number, size, developer_data_index
+          offset += 3;
+        }
+      }
+
+      localMsgDefs[localNum] = {
+        globalNum,
+        isBigEndian,
+        fields,
+      };
+    } else {
+      const def = localMsgDefs[localNum];
+
+      if (!def) {
+        // Without the local definition we cannot know this message length.
+        break;
+      }
+
+      parseDataMessage(def);
+    }
+  }
+
   if (!foundData) return {};
 
+  const distanceRaw =
+      sessionDistanceRaw ??
+      (lapDistanceRawTotal > 0 ? lapDistanceRawTotal : null) ??
+      (recordMaxDistRaw > 0 ? recordMaxDistRaw : null);
+
+  const distanceKm = distanceRaw != null && distanceRaw > 0
+      ? Math.round((distanceRaw / 100 / 1000) * 1000) / 1000
+      : null;
+
+  const elevationGainM =
+      sessionElevationGainM ??
+      (lapElevationGainMTotal > 0 ? lapElevationGainMTotal : null) ??
+      (recordElevGainRaw > 0 ? Math.round(recordElevGainRaw / 5) : null);
+
+  const heartRateAvg =
+      sessionAvgHr ??
+      (
+          lapAvgHrs.length
+              ? Math.round(lapAvgHrs.reduce((sum, hr) => sum + hr, 0) / lapAvgHrs.length)
+              : recordHrs.length
+                  ? Math.round(recordHrs.reduce((sum, hr) => sum + hr, 0) / recordHrs.length)
+                  : null
+      );
+
+  const heartRateMax =
+      sessionMaxHr ??
+      (
+          lapMaxHrs.length
+              ? Math.max(...lapMaxHrs)
+              : recordHrs.length
+                  ? Math.max(...recordHrs)
+                  : null
+      );
+
   return {
-    distanceKm: maxDistCm > 0 ? Math.round(maxDistCm / 100000 * 1000) / 1000 : null,
-    elevationGainM: totalElevGainM > 0 ? Math.round(totalElevGainM) : null,
-    heartRateAvg: hrs.length ? Math.round(hrs.reduce((a,b)=>a+b,0)/hrs.length) : null,
-    heartRateMax: hrs.length ? Math.max(...hrs) : null,
+    distanceKm,
+    elevationGainM,
+    heartRateAvg,
+    heartRateMax,
   };
 }
 
@@ -348,27 +524,39 @@ function ResultFileUploader({ filePath, fileName, userId, distanceKm, onChange, 
     const storedPath = res.route_file_path || res.result_file_path;
     onChange(storedPath, safeName);
 
-    // 3. Prefer client parse; fall back to backend parse for FIT files
+    // 3. Prefer client parse; fall back to backend parse for missing metrics
     let parsed = clientResult.status === 'fulfilled' ? clientResult.value : {};
-    const hasMetrics = v => v.distanceKm != null || v.elevationGainM != null
-                         || v.heartRateAvg != null || v.heartRateMax != null;
 
-    if (!hasMetrics(parsed) && storedPath && userId) {
+    const hasAnyMetric = v =>
+        v.distanceKm != null ||
+        v.elevationGainM != null ||
+        v.heartRateAvg != null ||
+        v.heartRateMax != null;
+
+    const hasMissingMetric = v =>
+        v.distanceKm == null ||
+        v.elevationGainM == null ||
+        v.heartRateAvg == null ||
+        v.heartRateMax == null;
+
+    if (hasMissingMetric(parsed) && storedPath && userId) {
       try {
         const sp = await api.parseResultFile(userId, storedPath.split('/').pop()).catch(() => null);
-        if (sp && hasMetrics({ distanceKm: sp.distance_km, elevationGainM: sp.elevation_gain_m, heartRateAvg: sp.heart_rate_avg })) {
+        if (sp) {
           parsed = {
-            distanceKm:    sp.distance_km    ?? null,
-            elevationGainM: sp.elevation_gain_m ?? null,
-            heartRateAvg:  sp.heart_rate_avg  ?? null,
-            heartRateMax:  sp.heart_rate_max  ?? null,
+            distanceKm: sp.distance_km ?? parsed.distanceKm ?? null,
+            elevationGainM: sp.elevation_gain_m ?? parsed.elevationGainM ?? null,
+            heartRateAvg: sp.heart_rate_avg ?? parsed.heartRateAvg ?? null,
+            heartRateMax: sp.heart_rate_max ?? parsed.heartRateMax ?? null,
           };
         }
-      } catch { /* best-effort */ }
+      } catch {
+        // best-effort
+      }
     }
 
     // 4. Autofill form fields
-    if (hasMetrics(parsed)) {
+    if (hasAnyMetric(parsed)) {
       onParsed(parsed);
       const fields = [];
       if (parsed.distanceKm    != null) fields.push(`distance ${parsed.distanceKm} km`);
@@ -668,6 +856,31 @@ export default function RaceFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Track files uploaded this session so we can delete them if user cancels
+  // Each entry: { type: 'route'|'result'|'attachment'|'rpc_attachment', userId, filename }
+  const pendingUploads = useRef([]);
+
+  const trackUpload = (type, filePath) => {
+    if (!filePath) return;
+    const filename = filePath.split('/').pop();
+    pendingUploads.current.push({ type, filename });
+  };
+
+  const clearPendingUploads = () => { pendingUploads.current = []; };
+
+  const deletePendingUploads = async () => {
+    for (const { type, filename } of pendingUploads.current) {
+      try {
+        if (type === 'attachment' || type === 'rpc_attachment') {
+          await api.deleteAttachment(userId, filename);
+        } else {
+          await api.deleteRouteFile(userId, filename);
+        }
+      } catch { /* best-effort, don't block navigation */ }
+    }
+    pendingUploads.current = [];
+  };
+
   useEffect(() => {
     api.me().then(u => setUserId(u.id)).catch(() => {});
     if (!isEdit) return;
@@ -718,10 +931,13 @@ export default function RaceFormPage() {
   const set = (key) => (e) => { setForm(f => ({ ...f, [key]: e.target.value })); setDirty(true); };
   const setVal = (key, val) => { setForm(f => ({ ...f, [key]: val })); setDirty(true); };
 
-  const handleCancel = (e) => {
+  const handleCancel = async (e) => {
     if (dirty && !window.confirm('You have unsaved changes. Discard and leave?')) {
       e.preventDefault();
+      return;
     }
+    // Delete any files uploaded this session since the form is being discarded
+    await deletePendingUploads();
   };
 
   const isTrail = form.race_type === 'trail';
@@ -733,6 +949,7 @@ export default function RaceFormPage() {
     try {
       const race = isEdit ? await api.updateRace(id, form) : await api.createRace(form);
       setDirty(false);
+      clearPendingUploads(); // files are now saved — don't delete them
       navigate(`/races/${race.id}`);
     } catch (err) { setError(err.message); setSaving(false); }
   };
@@ -808,7 +1025,7 @@ export default function RaceFormPage() {
           <Field label="Route file (optional — .fit / .gpx / .kml)">
             <RouteUploader filePath={form.route_file_path} fileName={form.route_file_name} userId={userId}
               distanceKm={form.distance_km}
-              onChange={(path, name) => { setVal('route_file_path', path); setVal('route_file_name', name); }}
+              onChange={(path, name) => { setVal('route_file_path', path); setVal('route_file_name', name); trackUpload('route', path); }}
               onClear={() => { setVal('route_file_path', ''); setVal('route_file_name', ''); }} />
           </Field>
 
@@ -853,7 +1070,7 @@ export default function RaceFormPage() {
           <div style={{ marginBottom:14 }}>
             <Field label="Attachment (optional — PDF)">
               <PdfUploader filePath={form.attachment_path} fileName={form.attachment_name} userId={userId}
-                onChange={(path, name) => { setVal('attachment_path', path); setVal('attachment_name', name); }}
+                onChange={(path, name) => { setVal('attachment_path', path); setVal('attachment_name', name); trackUpload('attachment', path); }}
                 onClear={() => { setVal('attachment_path', ''); setVal('attachment_name', ''); }} />
             </Field>
           </div>
@@ -932,7 +1149,7 @@ export default function RaceFormPage() {
           <div style={{ marginBottom:14 }}>
             <Field label="Attachment (optional — PDF)">
               <PdfUploader filePath={form.rpc_attachment_path} fileName={form.rpc_attachment_name} userId={userId}
-                onChange={(path, name) => { setVal('rpc_attachment_path', path); setVal('rpc_attachment_name', name); }}
+                onChange={(path, name) => { setVal('rpc_attachment_path', path); setVal('rpc_attachment_name', name); trackUpload('rpc_attachment', path); }}
                 onClear={() => { setVal('rpc_attachment_path', ''); setVal('rpc_attachment_name', ''); }} />
             </Field>
           </div>
@@ -997,7 +1214,7 @@ export default function RaceFormPage() {
                 fileName={form.result_file_name}
                 userId={userId}
                 distanceKm={form.distance_km}
-                onChange={(path, name) => { setVal('result_file_path', path); setVal('result_file_name', name); }}
+                onChange={(path, name) => { setVal('result_file_path', path); setVal('result_file_name', name); trackUpload('result', path); }}
                 onClear={() => { setVal('result_file_path', ''); setVal('result_file_name', ''); }}
                 onParsed={parsed => {
                   if (parsed.distanceKm    != null) setVal('actual_distance_km', String(parsed.distanceKm));

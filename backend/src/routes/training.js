@@ -11,7 +11,7 @@ function str(v) { return (v === '' || v === undefined) ? null : v; }
 router.get('/', async (req, res) => {
   const { year, month } = req.query;
   let query = `
-    SELECT t.*, r.event_name AS race_name, r.race_date
+    SELECT t.*, t.plan_date::text AS plan_date, r.event_name AS race_name, r.race_date::text AS race_date
     FROM training_plans t
     LEFT JOIN races r ON r.id = t.race_id AND r.user_id = t.user_id
     WHERE t.user_id = $1`;
@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT t.*, r.event_name AS race_name FROM training_plans t
+      `SELECT t.*, t.plan_date::text AS plan_date, r.event_name AS race_name FROM training_plans t
        LEFT JOIN races r ON r.id = t.race_id WHERE t.id=$1 AND t.user_id=$2`,
       [req.params.id, req.userId]
     );
@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO training_plans (user_id, name, plan_date, plan_time, race_id, notes)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *, plan_date::text AS plan_date`,
       [req.userId, name, plan_date, str(plan_time), str(race_id) || null, str(notes)]
     );
     res.status(201).json(rows[0]);
@@ -65,7 +65,7 @@ router.put('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `UPDATE training_plans SET name=$1, plan_date=$2, plan_time=$3, race_id=$4, notes=$5, updated_at=NOW()
-       WHERE id=$6 AND user_id=$7 RETURNING *`,
+       WHERE id=$6 AND user_id=$7 RETURNING *, plan_date::text AS plan_date`,
       [name, plan_date, str(plan_time), str(race_id) || null, str(notes), req.params.id, req.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });

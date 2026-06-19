@@ -76,12 +76,12 @@ function buildIcs(userId, userName, races, training) {
     const locationParts = [r.location, r.city, r.country].filter(Boolean);
 
     let desc = '';
-    if (r.bib_number)    desc += `Bib: #${r.bib_number}\\n`;
-    if (r.flag_off_time) desc += `Flag off: ${r.flag_off_time}\\n`;
-    if (r.cutoff_time)   desc += `Cut off: ${r.cutoff_time}\\n`;
-    if (r.category)      desc += `Category: ${r.category}\\n`;
-    if (r.status)        desc += `Status: ${r.status}\\n`;
-    if (r.website_url)   desc += `Website: ${r.website_url}\\n`;
+    if (r.bib_number)    desc += `Bib: #${r.bib_number}\n`;
+    if (r.flag_off_time) desc += `Flag off: ${r.flag_off_time}\n`;
+    if (r.cutoff_time)   desc += `Cut off: ${r.cutoff_time}\n`;
+    if (r.category)      desc += `Category: ${r.category}\n`;
+    if (r.status)        desc += `Status: ${r.status}\n`;
+    if (r.website_url)   desc += `Website: ${r.website_url}\n`;
 
     cal += 'BEGIN:VEVENT\r\n';
     cal += prop('UID', uid);
@@ -106,12 +106,12 @@ function buildIcs(userId, userName, races, training) {
       endDate.setDate(endDate.getDate() + 1);
       const rpcEnd = endDate.toISOString().slice(0, 10).replace(/-/g, '');
 
-      let rpcDesc = `Race pack collection for ${r.event_name}\\n`;
-      if (r.rpc_time)     rpcDesc += `Hours: ${r.rpc_time}\\n`;
-      if (r.rpc_location) rpcDesc += `Location: ${r.rpc_location}\\n`;
+      let rpcDesc = `Race pack collection for ${r.event_name}\n`;
+      if (r.rpc_time)     rpcDesc += `Hours: ${r.rpc_time}\n`;
+      if (r.rpc_location) rpcDesc += `Location: ${r.rpc_location}\n`;
 
       const rpcStatus = r.rpc_status === 'collected' ? 'Collected ✓' : 'Not collected yet';
-      rpcDesc += `Status: ${rpcStatus}\\n`;
+      rpcDesc += `Status: ${rpcStatus}\n`;
 
       cal += 'BEGIN:VEVENT\r\n';
       cal += prop('UID', `rpc-${r.id}@racetracker`);
@@ -134,9 +134,9 @@ function buildIcs(userId, userName, races, training) {
 
     const dateStr = t.plan_date.slice(0, 10);
     let desc = '';
-    if (t.plan_time) desc += `Time: ${t.plan_time}\\n`;
-    if (t.race_name) desc += `Related race: ${t.race_name}\\n`;
-    if (t.notes)     desc += `\\n${t.notes}`;
+    if (t.plan_time) desc += `Time: ${t.plan_time}\n`;
+    if (t.race_name) desc += `Related race: ${t.race_name}\n`;
+    if (t.notes)     desc += `\n${t.notes}`;
 
     cal += 'BEGIN:VEVENT\r\n';
     cal += prop('UID', `training-${t.id}@racetracker`);

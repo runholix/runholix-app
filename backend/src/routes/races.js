@@ -44,16 +44,16 @@ function mapRace(row) {
 // ── LIST ──────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   const { status, year, search, sort = 'race_date', order = 'desc' } = req.query;
-  let query = 'SELECT * FROM races WHERE user_id = $1';
+  let query = 'SELECT r.*, r.race_date::text AS race_date, r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end FROM races r WHERE r.user_id = $1';
   const params = [req.userId];
   let i = 2;
-  if (status) { query += ` AND status = $${i++}`; params.push(status); }
-  if (year)   { query += ` AND EXTRACT(YEAR FROM race_date) = $${i++}`; params.push(year); }
+  if (status) { query += ` AND r.status = $${i++}`; params.push(status); }
+  if (year)   { query += ` AND EXTRACT(YEAR FROM r.race_date) = $${i++}`; params.push(year); }
   if (search) {
-    query += ` AND (event_name ILIKE $${i} OR location ILIKE $${i} OR city ILIKE $${i})`;
+    query += ` AND (r.event_name ILIKE $${i} OR r.location ILIKE $${i} OR r.city ILIKE $${i})`;
     params.push(`%${search}%`); i++;
   }
-  const safeSort  = ['race_date','event_name','distance_km','finish_time_seconds','created_at'].includes(sort) ? sort : 'race_date';
+  const safeSort  = ['r.race_date','r.event_name','r.distance_km','r.finish_time_seconds','r.created_at'].includes(sort) ? sort : 'r.race_date';
   const safeOrder = order === 'asc' ? 'ASC' : 'DESC';
   query += ` ORDER BY ${safeSort} ${safeOrder}`;
   try {

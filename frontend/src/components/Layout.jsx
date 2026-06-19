@@ -3,6 +3,31 @@ import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import APP_NAME from '../lib/appName.js';
 import ThemeToggle from './ThemeToggle.jsx';
+import { api } from '../lib/api.js';
+
+// Shared avatar — photo if available, else initial letter
+function Avatar({ user, avatarTs, size = 30, fontSize = 13 }) {
+  const hasAvatar = user?.avatar_path && user?.id;
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: 'var(--color-primary-bg)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'var(--color-primary)', fontWeight: 600, fontSize, overflow: 'hidden',
+    }}>
+      {hasAvatar ? (
+        <img
+          src={`${api.avatarUrl(user.id)}?v=${avatarTs}`}
+          alt={user.name}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { e.target.style.display = 'none'; }}
+        />
+      ) : (
+        user?.name?.charAt(0).toUpperCase()
+      )}
+    </div>
+  );
+}
 
 const nav = [
   { to: '/', icon: 'ti-layout-dashboard', label: 'Dashboard', exact: true },
@@ -11,7 +36,7 @@ const nav = [
   { to: '/settings', icon: 'ti-settings', label: 'Settings' },
 ];
 
-function SidebarContent({ user, onLogout, onClose }) {
+function SidebarContent({ user, onLogout, onClose, avatarTs }) {
   return (
     <>
       {/* Logo row */}
@@ -84,14 +109,7 @@ function SidebarContent({ user, onLogout, onClose }) {
           onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg)'}
           onMouseLeave={e => e.currentTarget.style.background = ''}
         >
-          <div style={{
-            width: 30, height: 30, borderRadius: '50%',
-            background: 'var(--color-primary-bg)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--color-primary)', fontWeight: 600, fontSize: 12, flexShrink: 0,
-          }}>
-            {user?.name?.charAt(0).toUpperCase()}
-          </div>
+          <Avatar user={user} avatarTs={avatarTs} size={30} fontSize={12} />
           <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {user?.name}
@@ -112,7 +130,7 @@ function SidebarContent({ user, onLogout, onClose }) {
 }
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, avatarTs } = useAuth();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -126,7 +144,7 @@ export default function Layout() {
     <div className="layout-shell">
       {/* Desktop sidebar */}
       <aside className="sidebar">
-        <SidebarContent user={user} onLogout={handleLogout} />
+        <SidebarContent user={user} onLogout={handleLogout} avatarTs={avatarTs} />
       </aside>
 
       {/* Mobile drawer overlay */}
@@ -134,7 +152,7 @@ export default function Layout() {
 
       {/* Mobile drawer */}
       <div className={`drawer-sidebar${drawerOpen ? ' open' : ''}`}>
-        <SidebarContent user={user} onLogout={handleLogout} onClose={() => setDrawerOpen(false)} />
+        <SidebarContent user={user} onLogout={handleLogout} onClose={() => setDrawerOpen(false)} avatarTs={avatarTs} />
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -156,14 +174,7 @@ export default function Layout() {
           </div>
           {/* Compact icon-only toggle in topbar */}
           <ThemeToggle compact={true} />
-          <div style={{
-            width: 30, height: 30, borderRadius: '50%',
-            background: 'var(--color-primary-bg)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--color-primary)', fontWeight: 600, fontSize: 13, flexShrink: 0,
-          }}>
-            {user?.name?.charAt(0).toUpperCase()}
-          </div>
+          <Avatar user={user} avatarTs={avatarTs} size={30} fontSize={13} />
         </header>
 
         <main className="layout-main">

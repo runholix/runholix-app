@@ -62,17 +62,15 @@ const AVATAR_ACCEPT = '.jpg,.jpeg,.png,.heic,.HEIC';
 
 // ── Avatar Section ─────────────────────────────────────────────────────────
 function AvatarSection({ user, onUpdate }) {
+  const { avatarTs } = useAuth();
   const inputRef = useRef();
   const [preview, setPreview]   = useState(null); // local blob preview
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving]   = useState(false);
   const [result, setResult]       = useState(null);
 
-  const currentAvatarUrl = user?.avatar_path
-    ? api.avatarUrl(user.id) + '?v=' + Date.now() // bust cache after update
-    : null;
-
-  const displayUrl = preview || (user?.avatar_path ? api.avatarUrl(user.id) : null);
+  // Use avatarTs from auth context — bumped globally after every upload/remove
+  const displayUrl = preview || (user?.avatar_path ? `${api.avatarUrl(user.id)}?v=${avatarTs}` : null);
 
   const handleFile = async (e) => {
     let file = e.target.files[0];
@@ -500,11 +498,12 @@ function CalendarFeedSection() {
 
 // ── Main page ─────────────────────────────────────────────────────────────
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [currentUser, setCurrentUser] = useState(user);
 
   const handleUpdate = (patch) => {
     setCurrentUser(u => ({ ...u, ...patch }));
+    updateUser(patch); // propagates to Layout immediately, busts avatar cache
   };
 
   return (

@@ -1,17 +1,19 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../lib/api';
+import { api } from '../lib/api.js';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Bump this to bust the avatar URL cache without changing user.avatar_path
+  const [avatarTs, setAvatarTs] = useState(() => Date.now());
 
   useEffect(() => {
     const token = localStorage.getItem('rt_token');
     if (!token) { setLoading(false); return; }
     api.me()
-      .then(setUser)
+      .then(u => setUser(u))
       .catch(() => localStorage.removeItem('rt_token'))
       .finally(() => setLoading(false));
   }, []);
@@ -33,8 +35,15 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // Called by SettingsPage after profile updates
+  const updateUser = (patch) => {
+    setUser(u => ({ ...u, ...patch }));
+    // If avatar changed, bump timestamp to force image reload
+    if ('avatar_path' in patch) setAvatarTs(Date.now());
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, avatarTs }}>
       {children}
     </AuthContext.Provider>
   );

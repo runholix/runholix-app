@@ -18,7 +18,10 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
         try {
             const res = await api.uploadAttachment(file);
             onChange(res.attachment_path, sanitiseFileName(res.attachment_name));
-        } catch (ex) { setErr(ex.message); }
+        } catch (ex) {
+            console.error(ex);
+            setErr(`Failed to upload: ${ex?.status || ''} ${ex?.message || ''}`);
+        }
         finally { setUploading(false); e.target.value = ''; }
     };
 

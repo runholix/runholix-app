@@ -70,6 +70,7 @@ export default function RacesPage() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(restoredState?.filters || { status: '', year: '', search: '' });
   const [page, setPage]     = useState(restoredState?.page || 1);
+  const [error, setError] = useState('');
 
   const pageSize = usePageSize(page, setPage);
 
@@ -84,9 +85,16 @@ export default function RacesPage() {
     if (filters.status) params.status = filters.status;
     if (filters.year)   params.year   = filters.year;
     if (filters.search) params.search = filters.search;
-    const data = await api.getRaces(params);
-    setRaces(data);
-    setLoading(false);
+    try {
+      const data = await api.getRaces(params);
+      setRaces(data);
+      setError('');
+    } catch (err) {
+      console.error(err);
+      setError(`Failed to load races list: ${err?.status || ''} ${err.message}`)
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Reset to page 1 whenever filters change (but not on initial mount)
@@ -152,7 +160,9 @@ export default function RacesPage() {
       </div>
 
       {loading ? (
-        <div style={{ color: 'var(--color-text-muted)', padding: '40px 0' }}>Loading…</div>
+        <div className="alert-info">Loading...</div>
+      ) : error ? (
+          <div className="alert-error">{error}</div>
       ) : races.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 48 }}>
           <i className="ti ti-trophy" style={{ fontSize: 40, color: 'var(--color-text-hint)', display: 'block', marginBottom: 12 }} />

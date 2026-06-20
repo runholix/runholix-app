@@ -37,7 +37,8 @@ export default function TrainingModal({ plan, races, defaultDate, onSave, onClos
             plan?.id ? await api.updateTraining(plan.id, form) : await api.createTraining(form);
             onSave();
         } catch (err) {
-            setError(err.message);
+            console.error(err);
+            setError(`Failed to save: ${err?.status || ''} ${err.message}`);
             setSaving(false);
         }
     };

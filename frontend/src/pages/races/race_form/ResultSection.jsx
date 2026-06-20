@@ -1,7 +1,7 @@
 import Field from "../../../components/Field.jsx";
 import ResultFileUploader from "../../../components/ResultFileUploader.jsx";
 
-export default function ResultSection ({ setVal, set, makeOnClear, form, userId }) {
+export default function ResultSection ({ setVal, set, makeOnClear, form, userId, trackUpload }) {
     return (
         <>
             <div className="form-section-title">Results</div>

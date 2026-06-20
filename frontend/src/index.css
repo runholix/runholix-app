@@ -331,3 +331,12 @@ tbody tr:hover td { background: var(--color-bg); }
   font-size: 13px;
   margin-bottom: 20px;
 }
+
+.alert-info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 20px;
+}

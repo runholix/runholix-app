@@ -128,6 +128,8 @@ export default function CalendarPage() {
   const [editPlan, setEditPlan] = useState(null);
   const [defaultDate, setDefaultDate] = useState('');
   const [popup, setPopup] = useState(null);
+  const [error, setError] = useState('');
+  const [errorDelete, setErrorDelete] = useState('');
 
   const w = useWindowWidth();
 
@@ -137,6 +139,9 @@ export default function CalendarPage() {
       const [r, t] = await Promise.all([api.getRaces(), api.getTraining()]);
       setRaces(r);
       setTraining(t);
+    } catch (err) {
+      console.error(err);
+      setError(`Failed to load calendar data: ${err?.status || ''} ${err.message}`)
     } finally {
       setLoading(false);
     }
@@ -197,9 +202,15 @@ export default function CalendarPage() {
   const handleEditPlan = () => { setEditPlan(popup.plan); setPopup(null); setShowForm(true); };
   const handleDeletePlan = async () => {
     if (!confirm(`Delete "${popup.plan.name}"?`)) return;
-    await api.deleteTraining(popup.plan.id);
-    setPopup(null);
-    await loadData();
+    try {
+      await api.deleteTraining(popup.plan.id);
+      setPopup(null);
+      setErrorDelete('');
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      setErrorDelete(`Failed to delete training: ${err?.status || ''} ${err.message}`);
+    }
   };
 
   return (
@@ -232,9 +243,12 @@ export default function CalendarPage() {
       <div style={{ marginBottom: 10 }}><Legend /></div>
 
       {loading ? (
-        <div style={{ color: 'var(--color-text-muted)', padding: 40 }}>Loading…</div>
+          <div className="alert-info">Loading...</div>
+      ) : error ? (
+          <div className="alert-error">{error}</div>
       ) : (
         <>
+          {errorDelete && <div className="alert-error">{errorDelete}</div>}
           {view === 'yearly'  && <YearlyView  date={date} events={events} onEventClick={handleEventClick} onDayClick={handleMonthClick} />}
           {view === 'monthly' && <MonthlyView date={date} events={events} onEventClick={handleEventClick} onDayClick={handleDayClick} />}
           {view === 'weekly'  && <WeeklyView  date={date} events={events} onEventClick={handleEventClick} onDayClick={handleDayClick} />}

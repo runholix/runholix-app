@@ -162,6 +162,9 @@ export default function RaceFormPage() {
         rpc_notes: race.rpc_notes || '',
         mandatory_items: Array.isArray(race.mandatory_items) ? race.mandatory_items : [],
       });
+    }).catch((err) => {
+      console.error(err);
+      setError(`Failed to load race details: ${err?.status || ''} ${err.message}`);
     }).finally(() => setLoading(false));
   }, [id]);
 
@@ -191,10 +194,13 @@ export default function RaceFormPage() {
       clearPendingUploads();
       await executePendingDeletions(); // now safe to delete existing files user removed
       navigate(`/races/${race.id}`);
-    } catch (err) { setError(err.message); setSaving(false); }
+    } catch (err) {
+      console.error(err);
+      window.scrollTo(0, 0);
+      setError(`Failed to save: ${err?.status || ''} ${err?.message || ''}`);
+      setSaving(false);
+    }
   };
-
-  if (loading) return <div className="page" style={{ color:'var(--color-text-muted)' }}>Loading…</div>;
 
   const showResults = form.status === 'completed' || form.status === 'dnf';
 
@@ -206,6 +212,7 @@ export default function RaceFormPage() {
       <h1 className="page-title" style={{ marginBottom:24 }}>{isEdit ? 'Edit race' : 'Add new race'}</h1>
 
       {error && <div className="alert-error">{error}</div>}
+      {loading && <div className="alert-info">Loading...</div>}
 
       <form onSubmit={submit}>
         <div className="card">
@@ -223,7 +230,7 @@ export default function RaceFormPage() {
           <FacilitySection facilities={form.facilities} onChange={facs => setVal('facilities', facs)} />
 
           {/* ── RACE PACK COLLECTION ───────────────────────────────── */}
-          <RacePackCollectionSection setVal={setVal} set={set} makeOnClear={makeOnClear} form={form} userId={userId} />
+          <RacePackCollectionSection setVal={setVal} set={set} makeOnClear={makeOnClear} form={form} userId={userId} trackUpload={trackUpload} />
 
           {/* ── MANDATORY ITEMS (trail only) ───────────────────────── */}
           {isTrail && (
@@ -234,7 +241,7 @@ export default function RaceFormPage() {
 
           {/* ── RESULTS ────────────────────────────────────────────── */}
           {showResults && (
-              <ResultSection setVal={setVal} set={set} makeOnClear={makeOnClear} form={form} userId={userId} />
+              <ResultSection setVal={setVal} set={set} makeOnClear={makeOnClear} form={form} userId={userId} trackUpload={trackUpload} />
           )}
 
           {/* ── NOTES ──────────────────────────────────────────────── */}

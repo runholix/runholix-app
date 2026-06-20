@@ -12,8 +12,20 @@ async function request(path, options = {}) {
       ...options.headers,
     },
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+
+  if (!res.ok) {
+    const err= new Error(data.error || 'Request failed');
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
   return data;
 }
 
@@ -26,8 +38,20 @@ async function uploadFile(endpoint, file) {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: fd,
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+
+  if (!res.ok) {
+    const err = new Error(data.error || 'Upload failed');
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
   return data;
 }
 

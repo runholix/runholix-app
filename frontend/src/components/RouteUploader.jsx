@@ -16,7 +16,10 @@ export default function RouteUploader({ filePath, fileName, userId, distanceKm, 
         try {
             const res = await api.uploadRoute(file, distanceKm);
             onChange(res.route_file_path, sanitiseFileName(res.route_file_name));
-        } catch (ex) { setErr(ex.message); }
+        } catch (ex) {
+            console.error(ex);
+            setErr(`Failed to upload: ${ex?.status || ''} ${ex?.message || ''}`);
+        }
         finally { setUploading(false); e.target.value = ''; }
     };
 

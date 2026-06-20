@@ -41,13 +41,14 @@ export default function RaceDetailPage() {
   const fromRaces = location.state?.fromRaces; // { filters, page } from RacesPage
   const [race, setRace] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api.getRace(id).then(setRace).finally(() => setLoading(false));
+    api.getRace(id).then(setRace).catch((err) => {
+        console.error(err);
+        setError(`Failed to load race details: ${err?.status || ''} ${err.message}`);
+    }).finally(() => setLoading(false));
   }, [id]);
-
-  if (loading) return <div className="page" style={{ color: 'var(--color-text-muted)' }}>Loading…</div>;
-  if (!race) return <div className="page">Race not found.</div>;
 
   return (
     <div className="page" style={{ maxWidth: 900 }}>
@@ -62,45 +63,58 @@ export default function RaceDetailPage() {
         <i className="ti ti-arrow-left" /> {fromCalendar ? 'Back to calendar' : 'Back to races'}
       </Link>
 
-      <HeaderSection race={race} id={id} />
+      {loading ? (
+        <div className="alert-info">Loading...</div>
+      ) : error ? (
+        <div className="alert-error">{error}</div>
+      ) : (
+          race ? (
+              <>
+                  <HeaderSection race={race} id={id} />
 
-      <div className="card">
-        <EventInfoSection user={user} race={race} />
-        <RegistrationSection user={user} race={race} />
-        <RaceDetailSection race={race} />
+                  <div className="card">
+                      <EventInfoSection user={user} race={race} />
+                      <RegistrationSection user={user} race={race} />
+                      <RaceDetailSection race={race} />
 
-        {Array.isArray(race.facilities) && race.facilities.length > 0 && (
-          <FacilitySection race={race} />
-        )}
+                      {Array.isArray(race.facilities) && race.facilities.length > 0 && (
+                          <FacilitySection race={race} />
+                      )}
 
-        {(race.rpc_date_start || race.rpc_time || race.rpc_location || race.rpc_notes || race.rpc_attachment_path) && (
-          <RacePackCollectionSection user={user} race={race} />
-        )}
+                      {(race.rpc_date_start || race.rpc_time || race.rpc_location || race.rpc_notes || race.rpc_attachment_path) && (
+                          <RacePackCollectionSection user={user} race={race} />
+                      )}
 
-        {race.race_type === 'trail' && Array.isArray(race.mandatory_items) && race.mandatory_items.length > 0 && (
-          <MandatoryItemsSection race={race} />
-        )}
+                      {race.race_type === 'trail' && Array.isArray(race.mandatory_items) && race.mandatory_items.length > 0 && (
+                          <MandatoryItemsSection race={race} />
+                      )}
 
-        <ResultSection user={user} race={race} />
+                      <ResultSection user={user} race={race} />
 
-        {(race.website_url || race.instagram_url || race.results_url || race.certificate_url || race.strava_url || (race.race_type === 'trail' && race.itra_url)) && (
-          <LinkSection race={race} />
-        )}
+                      {(race.website_url || race.instagram_url || race.results_url || race.certificate_url || race.strava_url || (race.race_type === 'trail' && race.itra_url)) && (
+                          <LinkSection race={race} />
+                      )}
 
-        {race.notes && (
-          <div style={{ marginBottom: 20 }}>
-            <div className="form-section-title">Notes</div>
-            <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--color-text-muted)' }}>{race.notes}</p>
-          </div>
-        )}
+                      {race.notes && (
+                          <div style={{ marginBottom: 20 }}>
+                              <div className="form-section-title">Notes</div>
+                              <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--color-text-muted)' }}>{race.notes}</p>
+                          </div>
+                      )}
 
-        {race.race_report && (
-          <div>
-            <div className="form-section-title">Race report</div>
-            <p style={{ fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{race.race_report}</p>
-          </div>
-        )}
-      </div>
+                      {race.race_report && (
+                          <div>
+                              <div className="form-section-title">Race report</div>
+                              <p style={{ fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{race.race_report}</p>
+                          </div>
+                      )}
+                  </div>
+              </>
+          ) : (
+            <div className="alert-error">Race data not found.</div>
+          )
+      )}
+
     </div>
   );
 }

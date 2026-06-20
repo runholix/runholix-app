@@ -1,7 +1,7 @@
 import Field from "../../../components/Field.jsx";
 import PdfUploader from "../../../components/PdfUploader.jsx";
 
-export default function RacePackCollectionSection ({ setVal, set, makeOnClear, form, userId }) {
+export default function RacePackCollectionSection ({ setVal, set, makeOnClear, form, userId, trackUpload }) {
     return (
         <>
             <div className="form-section-title">Race Pack Collection</div>

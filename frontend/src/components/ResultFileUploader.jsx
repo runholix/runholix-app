@@ -28,7 +28,8 @@ export default function ResultFileUploader({ filePath, fileName, userId, distanc
         e.target.value = '';
 
         if (uploadResult.status === 'rejected') {
-            setErr(uploadResult.reason?.message || 'Upload failed');
+            console.error(uploadResult);
+            setErr(`Failed to upload: ${uploadResult?.reason?.status || ''} ${uploadResult?.reason?.message || ''}`);
             return;
         }
 

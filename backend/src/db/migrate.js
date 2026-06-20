@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS races (
     CHECK (status IN ('registered','dns','dnf','completed','upcoming')),
   registration_fee NUMERIC(10,2),
   registration_currency TEXT DEFAULT 'USD',
+  registration_datetime TIMESTAMP,
   bib_number TEXT,
   confirmation_number TEXT,
 

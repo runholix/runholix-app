@@ -82,6 +82,7 @@ async function startWithMigration() {
           CHECK (status IN ('registered','dns','dnf','completed','upcoming')),
 
         -- Registration
+        registration_datetime TIMESTAMP,
         registration_fee      NUMERIC(10,2),
         registration_currency TEXT DEFAULT 'USD',
         bib_number            TEXT,
@@ -152,6 +153,7 @@ async function startWithMigration() {
       ALTER TABLE races ADD COLUMN IF NOT EXISTS jersey_size        TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS registered_email   TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS registered_phone   TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS registration_datetime TIMESTAMP;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS finish_time_target TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS attachment_path      TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS attachment_name      TEXT;

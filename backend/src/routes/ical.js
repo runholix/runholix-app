@@ -45,6 +45,10 @@ function toIcsDateTime(dateStr, timeStr) {
   return base + 'T' + t;
 }
 
+function toIcsTimestamp(value) {
+  return String(value).replace(' ', 'T').slice(0, 19).replace(/[-:]/g, '');
+}
+
 function buildIcs(userId, userName, races, training) {
   const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '') + 'Z';
   const prodId = '-//RaceTracker//RaceTracker Calendar Feed//EN';
@@ -95,6 +99,24 @@ function buildIcs(userId, userName, races, training) {
     cal += prop('CATEGORIES', 'RACE');
     cal += prop('COLOR', 'BLUE');
     cal += 'END:VEVENT\r\n';
+
+    if (r.status === 'upcoming' && r.registration_datetime) {
+      let regDesc = `Registration for ${r.event_name}\n`;
+      if (r.website_url) regDesc += `Website: ${r.website_url}\n`;
+      if (r.race_date)   regDesc += `Race date: ${r.race_date.slice(0, 10)}\n`;
+
+      cal += 'BEGIN:VEVENT\r\n';
+      cal += prop('UID', `registration-${r.id}@racetracker`);
+      cal += prop('DTSTAMP', now);
+      cal += prop('DTSTART', toIcsTimestamp(r.registration_datetime));
+      cal += prop('SUMMARY', esc(`Registration: ${r.event_name}`));
+      cal += prop('DESCRIPTION', esc(regDesc));
+      if (r.website_url) cal += prop('URL', esc(r.website_url));
+      cal += prop('STATUS', 'TENTATIVE');
+      cal += prop('CATEGORIES', 'REGISTRATION');
+      cal += prop('COLOR', 'PURPLE');
+      cal += 'END:VEVENT\r\n';
+    }
 
     // ── RPC range events ─────────────────────────────────────────────────
     if (r.rpc_date_start) {
@@ -172,6 +194,7 @@ router.get('/:token.ics', async (req, res) => {
     const { rows: races } = await pool.query(
       `SELECT *,
          race_date::text        AS race_date,
+         registration_datetime::text AS registration_datetime,
          rpc_date_start::text   AS rpc_date_start,
          rpc_date_end::text     AS rpc_date_end
        FROM races WHERE user_id = $1 ORDER BY races.race_date DESC`,

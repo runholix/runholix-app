@@ -10,6 +10,11 @@ function fmtTime(sec) {
   return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
 }
 
+function fmtDateTime(value) {
+  if (!value) return null;
+  return format(parseISO(String(value).replace(' ', 'T')), 'dd MMM yyyy, HH:mm');
+}
+
 // Parse "HH:MM:SS" or "MM:SS" string to seconds
 function parseTimeStr(t) {
   if (!t) return null;
@@ -272,6 +277,9 @@ export default function RaceDetailPage() {
         )}
 
         <Section title="Registration details">
+          {race.status === 'upcoming' && (
+            <Field label="Registration date time" value={fmtDateTime(race.registration_datetime)} />
+          )}
           <Field label="Bib number" value={race.bib_number} />
           <Field label="Name on BIB" value={race.bib_name} />
           <Field label="Confirmation #" value={race.confirmation_number} />

@@ -14,9 +14,17 @@ const VIEW_LABELS = { yearly: 'Year', monthly: 'Month', weekly: 'Week', daily: '
 
 const EVENT_COLORS = {
   race:     { bg: '#dbeafe', border: '#3b82f6', text: '#1d40b0' },
+  registration: { bg: '#ede9fe', border: '#8b5cf6', text: '#5b21b6' },
   rpc:      { bg: '#fef9c3', border: '#eab308', text: '#854d0e' },
   training: { bg: '#dcfce7', border: '#22c55e', text: '#166534' },
 };
+
+function eventIcon(type) {
+  if (type === 'race') return '🏃';
+  if (type === 'registration') return '📝';
+  if (type === 'rpc') return '📦';
+  return '📋';
+}
 
 // ── Responsive hook ───────────────────────────────────────────────────────
 function useWindowWidth() {
@@ -37,7 +45,7 @@ function eventSortKey(ev) {
   const timeMin = /^\d{1,2}:\d{2}/.test(timeStr)
     ? parseInt(timeStr) * 60 + parseInt(timeStr.split(':')[1])
     : 9999;
-  const typeOrder = { race: 0, rpc: 1, training: 2 };
+  const typeOrder = { registration: 0, race: 1, rpc: 2, training: 3 };
   return [timeMin, typeOrder[ev.type] ?? 3, ev.label];
 }
 
@@ -62,6 +70,17 @@ function buildEvents(races, training) {
         label: r.event_name,
         id: r.id,
         time: r.flag_off_time || '',
+        race: r,
+      });
+    }
+    if (r.status === 'upcoming' && r.registration_datetime) {
+      const registrationDateTime = String(r.registration_datetime).replace(' ', 'T');
+      events.push({
+        type: 'registration',
+        date: registrationDateTime.slice(0, 10),
+        label: `Registration: ${r.event_name}`,
+        id: r.id,
+        time: registrationDateTime.slice(11, 16),
         race: r,
       });
     }
@@ -137,7 +156,7 @@ function EventChip({ event, onEventClick }) {
         display: 'block',
       }}
     >
-      {event.type === 'race' ? '🏃 ' : event.type === 'rpc' ? '📦 ' : '📋 '}
+      {eventIcon(event.type)}{' '}
       {event.label}
     </span>
   );
@@ -370,6 +389,7 @@ function YearlyView({ date, events, onEventClick, onDayClick }) {
                 const dayEvents = eventsForDate(events, ds);
                 const inMonth = isSameMonth(day, month);
                 const raceEvt  = dayEvents.find(e => e.type === 'race');
+                const regEvt   = dayEvents.find(e => e.type === 'registration');
                 const rpcEvt   = dayEvents.find(e => e.type === 'rpc');
                 const trainEvt = dayEvents.find(e => e.type === 'training');
                 return (
@@ -386,9 +406,10 @@ function YearlyView({ date, events, onEventClick, onDayClick }) {
                     }}
                   >
                     {format(day, 'd')}
-                    {inMonth && (raceEvt || rpcEvt || trainEvt) && (
+                    {inMonth && (raceEvt || regEvt || rpcEvt || trainEvt) && (
                       <div style={{ display: 'flex', justifyContent: 'center', gap: 1, marginTop: 1 }}>
                         {raceEvt  && <span onClick={e => { e.stopPropagation(); onEventClick(raceEvt, e); }} style={{ width: 4, height: 4, borderRadius: '50%', background: EVENT_COLORS.race.border, display: 'block', cursor: 'pointer' }} />}
+                        {regEvt   && <span onClick={e => { e.stopPropagation(); onEventClick(regEvt, e); }}   style={{ width: 4, height: 4, borderRadius: '50%', background: EVENT_COLORS.registration.border, display: 'block', cursor: 'pointer' }} />}
                         {rpcEvt   && <span onClick={e => { e.stopPropagation(); onEventClick(rpcEvt, e); }}  style={{ width: 4, height: 4, borderRadius: '50%', background: EVENT_COLORS.rpc.border, display: 'block', cursor: 'pointer' }} />}
                         {trainEvt && <span onClick={e => { e.stopPropagation(); onEventClick(trainEvt, e); }} style={{ width: 4, height: 4, borderRadius: '50%', background: EVENT_COLORS.training.border, display: 'block', cursor: 'pointer' }} />}
                       </div>
@@ -551,7 +572,7 @@ function MonthlyView({ date, events, onEventClick, onDayClick }) {
                     }}
                   >
                     <span style={{ fontSize: 14, flexShrink: 0 }}>
-                      {ev.type === 'race' ? '🏃' : ev.type === 'rpc' ? '📦' : '📋'}
+                      {eventIcon(ev.type)}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -642,7 +663,7 @@ function WeeklyView({ date, events, onEventClick, onDayClick }) {
                         }}
                       >
                         <span style={{ fontSize: 14, flexShrink: 0 }}>
-                          {ev.type === 'race' ? '🏃' : ev.type === 'rpc' ? '📦' : '📋'}
+                          {eventIcon(ev.type)}
                         </span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 500, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -721,7 +742,7 @@ function DailyView({ date, events, onEventClick }) {
             const c = EVENT_COLORS[ev.type];
             // Time to display: flag_off for race, rpc_time for rpc, plan_time for training
             const displayTime = ev.time;
-            const typeLabel = ev.type === 'race' ? 'Race' : ev.type === 'rpc' ? 'Race Pack Collection' : 'Training';
+            const typeLabel = ev.type === 'race' ? 'Race' : ev.type === 'registration' ? 'Registration' : ev.type === 'rpc' ? 'Race Pack Collection' : 'Training';
             return (
               <div
                 key={i}
@@ -734,7 +755,7 @@ function DailyView({ date, events, onEventClick }) {
                 }}
               >
                 <span style={{ fontSize: 20, flexShrink: 0 }}>
-                  {ev.type === 'race' ? '🏃' : ev.type === 'rpc' ? '📦' : '📋'}
+                  {eventIcon(ev.type)}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 500, fontSize: 14, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -761,6 +782,7 @@ function Legend() {
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
       {[
         { type: 'race',     label: 'Race' },
+        { type: 'registration', label: 'Registration' },
         { type: 'rpc',      label: 'Race Pack' },
         { type: 'training', label: 'Training' },
       ].map(({ type, label }) => (
@@ -858,7 +880,7 @@ export default function CalendarPage() {
   };
 
   const handleEventClick = (event, e) => {
-    if (event.type === 'race' || event.type === 'rpc') {
+    if (event.type === 'race' || event.type === 'registration' || event.type === 'rpc') {
       navigate(`/races/${event.id}`, { state: { from: 'calendar' } });
     } else {
       const rect = e.currentTarget.getBoundingClientRect();

@@ -13,6 +13,9 @@ function num(v) {
 function str(v) {
   return (v === '' || v === undefined) ? null : v;
 }
+function registrationDateTime(b) {
+  return b.status === 'upcoming' ? str(b.registration_datetime) : null;
+}
 function jsonArr(v) {
   if (!v) return '[]';
   if (typeof v === 'string') return v;
@@ -44,7 +47,7 @@ function mapRace(row) {
 // ── LIST ──────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   const { status, year, search, sort = 'race_date', order = 'desc' } = req.query;
-  let query = 'SELECT r.*, r.race_date::text AS race_date, r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end FROM races r WHERE r.user_id = $1';
+  let query = 'SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime, r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end FROM races r WHERE r.user_id = $1';
   const params = [req.userId];
   let i = 2;
   if (status) { query += ` AND r.status = $${i++}`; params.push(status); }
@@ -84,7 +87,7 @@ router.get('/stats', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM races WHERE id=$1 AND user_id=$2',
+      'SELECT *, race_date::text AS race_date, registration_datetime::text AS registration_datetime, rpc_date_start::text AS rpc_date_start, rpc_date_end::text AS rpc_date_end FROM races WHERE id=$1 AND user_id=$2',
       [req.params.id, req.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -164,7 +167,8 @@ router.post('/', async (req, res) => {
         mandatory_items,      -- $61
         strava_url,           -- $62
         result_file_path,     -- $63
-        result_file_name      -- $64
+        result_file_name,     -- $64
+        registration_datetime -- $65
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
@@ -172,7 +176,7 @@ router.post('/', async (req, res) => {
         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,
         $43,$44,$45,$46,$47,$48,$49,$50,$51,$52,
         $53,$54,$55,$56,$57,$58,$59,$60,$61,$62,
-        $63,$64
+        $63,$64,$65
       ) RETURNING *`,
       [
         req.userId,                          // $1
@@ -239,6 +243,7 @@ router.post('/', async (req, res) => {
         str(b.strava_url),                  // $62
         str(b.result_file_path),            // $63
         str(b.result_file_name),            // $64
+        registrationDateTime(b),            // $65
       ]
     );
     res.status(201).json(mapRace(rows[0]));
@@ -288,8 +293,9 @@ router.put('/:id', async (req, res) => {
         mandatory_items=$60,
         strava_url=$61,
         result_file_path=$62,    result_file_name=$63,
+        registration_datetime=$64,
         updated_at=NOW()
-      WHERE id=$64 AND user_id=$65 RETURNING *`,
+      WHERE id=$65 AND user_id=$66 RETURNING *`,
       [
         b.event_name,                        // $1
         b.race_date,                         // $2
@@ -354,8 +360,9 @@ router.put('/:id', async (req, res) => {
         str(b.strava_url),                  // $61
         str(b.result_file_path),            // $62
         str(b.result_file_name),            // $63
-        req.params.id,                      // $64
-        req.userId,                         // $65
+        registrationDateTime(b),            // $64
+        req.params.id,                      // $65
+        req.userId,                         // $66
       ]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });

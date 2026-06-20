@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 
 // ── Default state ─────────────────────────────────────────────────────────
 const EMPTY = {
-  event_name: '', race_date: '', flag_off_time: '', cutoff_time: '',
+  event_name: '', race_date: '', registration_datetime: '', flag_off_time: '', cutoff_time: '',
   route_file_path: '', route_file_name: '',
   location: '', city: '', country: '', website_url: '', instagram_url: '',
   itra_url: '',
@@ -937,6 +937,7 @@ export default function RaceFormPage() {
     api.getRace(id).then(race => {
       setForm({
         event_name: race.event_name || '', race_date: race.race_date?.slice(0,10) || '',
+        registration_datetime: race.registration_datetime ? String(race.registration_datetime).replace(' ', 'T').slice(0,16) : '',
         flag_off_time: race.flag_off_time || '', cutoff_time: race.cutoff_time || '',
         route_file_path: race.route_file_path || '', route_file_name: race.route_file_name || '',
         location: race.location || '', city: race.city || '', country: race.country || '',
@@ -1013,7 +1014,7 @@ export default function RaceFormPage() {
 
   return (
     <div className="page" style={{ maxWidth: 820 }}>
-      <Link to={isEdit ? `/races/${id}` : '/races'} style={{ fontSize:13, color:'var(--color-text-muted)', display:'inline-flex', alignItems:'center', gap:4, marginBottom:20 }}>
+      <Link onClick={handleCancel} to={isEdit ? `/races/${id}` : '/races'} style={{ fontSize:13, color:'var(--color-text-muted)', display:'inline-flex', alignItems:'center', gap:4, marginBottom:20 }}>
         <i className="ti ti-arrow-left" /> {isEdit ? 'Back to race' : 'Back to races'}
       </Link>
       <h1 className="page-title" style={{ marginBottom:24 }}>{isEdit ? 'Edit race' : 'Add new race'}</h1>
@@ -1045,6 +1046,19 @@ export default function RaceFormPage() {
               </select>
             </Field>
           </div>
+
+          {form.status === 'upcoming' && (
+            <div className="grid-form-2" style={{ marginBottom:14 }}>
+              <Field label="Registration date time" hint="Shown in calendar when filled">
+                <input
+                  type="datetime-local"
+                  value={form.registration_datetime}
+                  onChange={set('registration_datetime')}
+                  max={form.race_date ? `${form.race_date}T23:59` : undefined}
+                />
+              </Field>
+            </div>
+          )}
 
           <div className="grid-form-2" style={{ marginBottom:14 }}>
             <Field label="Flag off time (HH:MM, optional)" hint="24-hour format e.g. 05:30">

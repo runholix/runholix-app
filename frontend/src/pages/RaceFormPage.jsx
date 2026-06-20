@@ -110,14 +110,8 @@ function RouteUploader({ filePath, fileName, userId, distanceKm, onChange, onCle
     finally { setUploading(false); e.target.value = ''; }
   };
 
-  const handleRemove = async () => {
-    if (!window.confirm(`Remove route file "${fileName}"? It will be deleted from the server.`)) return;
-    // Delete from backend
-    if (filePath && userId) {
-      const filename = filePath.split('/').pop();
-      api.deleteRouteFile(userId, filename).catch(() => {});
-    }
-    onClear();
+  const handleRemove = () => {
+    onClear(); // confirm + delete logic is in makeOnClear passed from the form
   };
 
   const limit = routeLimitBytes(distanceKm);
@@ -199,6 +193,29 @@ function parseGpx(text) {
     elevationGainM: elevGain > 0 ? Math.round(elevGain) : null,
     heartRateAvg: hrs.length ? Math.round(hrs.reduce((a,b) => a+b, 0) / hrs.length) : null,
     heartRateMax: hrs.length ? Math.max(...hrs) : null,
+  };
+}
+
+function parseKml(text) {
+  const dom = new DOMParser().parseFromString(text, 'application/xml');
+  // KML stores coords as lon,lat,ele tuples
+  const coordEl = dom.querySelector('coordinates');
+  if (!coordEl) return {};
+  const tuples = coordEl.textContent.trim().split(/\s+/).map(t => t.split(',').map(Number));
+  if (tuples.length < 2) return {};
+
+  let distKm = 0, elevGain = 0, prevEle = null, prevLat = null, prevLon = null;
+  tuples.forEach(([lon, lat, ele]) => {
+    if (isNaN(lat) || isNaN(lon)) return;
+    if (prevLat !== null) distKm += haversineKm(prevLat, prevLon, lat, lon);
+    if (!isNaN(ele) && prevEle !== null && ele > prevEle) elevGain += ele - prevEle;
+    prevLat = lat; prevLon = lon; prevEle = isNaN(ele) ? null : ele;
+  });
+
+  return {
+    distanceKm: distKm > 0 ? Math.round(distKm * 1000) / 1000 : null,
+    elevationGainM: elevGain > 0 ? Math.round(elevGain) : null,
+    heartRateAvg: null, heartRateMax: null,
   };
 }
 
@@ -569,13 +586,9 @@ function ResultFileUploader({ filePath, fileName, userId, distanceKm, onChange, 
     }
   };
 
-  const handleRemove = async () => {
-    if (!window.confirm(`Remove result file "${fileName}"? It will be deleted from the server.`)) return;
-    if (filePath && userId) {
-      api.deleteResultFile(userId, filePath.split('/').pop()).catch(() => {});
-    }
+  const handleRemove = () => {
     setParseMsg('');
-    onClear();
+    onClear(); // confirm + delete logic handled by makeOnClear in the form
   };
 
   const limit = routeLimitBytes(distanceKm);
@@ -628,14 +641,10 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
     finally { setUploading(false); e.target.value = ''; }
   };
 
-  const handleRemove = async () => {
-    if (!window.confirm(`Remove "${fileName}"? It will be deleted from the server.`)) return;
-    if (filePath && userId) {
-      api.deleteAttachment(userId, filePath.split('/').pop()).catch(() => {});
-    }
+  const handleRemove = () => {
     setViewing(false);
     setFullscreen(false);
-    onClear();
+    onClear(); // confirm + delete logic handled by makeOnClear in the form
   };
 
   if (filePath && fileName) {
@@ -857,8 +866,9 @@ export default function RaceFormPage() {
   const [error, setError] = useState('');
 
   // Track files uploaded this session so we can delete them if user cancels
-  // Each entry: { type: 'route'|'result'|'attachment'|'rpc_attachment', userId, filename }
   const pendingUploads = useRef([]);
+  // Track existing files removed but not yet saved — delete from backend only on save
+  const pendingDeletions = useRef([]);
 
   const trackUpload = (type, filePath) => {
     if (!filePath) return;
@@ -876,9 +886,49 @@ export default function RaceFormPage() {
         } else {
           await api.deleteRouteFile(userId, filename);
         }
-      } catch { /* best-effort, don't block navigation */ }
+      } catch { /* best-effort */ }
     }
     pendingUploads.current = [];
+  };
+
+  const executePendingDeletions = async () => {
+    for (const { type, filename } of pendingDeletions.current) {
+      try {
+        if (type === 'attachment' || type === 'rpc_attachment') {
+          await api.deleteAttachment(userId, filename);
+        } else {
+          await api.deleteRouteFile(userId, filename);
+        }
+      } catch { /* best-effort */ }
+    }
+    pendingDeletions.current = [];
+  };
+
+  // Smart remove: if file was uploaded this session → delete now; if existing → defer to save
+  const makeOnClear = (type, currentPath, clearFn) => async () => {
+    const label = type === 'attachment' || type === 'rpc_attachment' ? 'PDF' : 'file';
+    const isPending = pendingUploads.current.some(u => u.filename === currentPath?.split('/')?.pop());
+
+    if (isPending) {
+      // Newly uploaded — delete immediately from backend
+      if (!window.confirm(`Remove this ${label}? It will be deleted immediately.`)) return;
+      const filename = currentPath.split('/').pop();
+      if (type === 'attachment' || type === 'rpc_attachment') {
+        api.deleteAttachment(userId, filename).catch(() => {});
+      } else {
+        api.deleteRouteFile(userId, filename).catch(() => {});
+      }
+      // Remove from pendingUploads
+      pendingUploads.current = pendingUploads.current.filter(u => u.filename !== filename);
+    } else {
+      // Existing file — only delete from backend when user clicks Save
+      if (!window.confirm(`Remove this ${label}? It will be deleted when you save changes.`)) return;
+      if (currentPath) {
+        pendingDeletions.current.push({ type, filename: currentPath.split('/').pop() });
+      }
+    }
+    setDirty(true);
+    clearFn();
   };
 
   useEffect(() => {
@@ -936,8 +986,10 @@ export default function RaceFormPage() {
       e.preventDefault();
       return;
     }
-    // Delete any files uploaded this session since the form is being discarded
+    // Delete only newly uploaded files — existing files are untouched on cancel
     await deletePendingUploads();
+    // pendingDeletions are NOT executed — existing files stay on server
+    pendingDeletions.current = [];
   };
 
   const isTrail = form.race_type === 'trail';
@@ -949,7 +1001,8 @@ export default function RaceFormPage() {
     try {
       const race = isEdit ? await api.updateRace(id, form) : await api.createRace(form);
       setDirty(false);
-      clearPendingUploads(); // files are now saved — don't delete them
+      clearPendingUploads();
+      await executePendingDeletions(); // now safe to delete existing files user removed
       navigate(`/races/${race.id}`);
     } catch (err) { setError(err.message); setSaving(false); }
   };
@@ -1026,7 +1079,7 @@ export default function RaceFormPage() {
             <RouteUploader filePath={form.route_file_path} fileName={form.route_file_name} userId={userId}
               distanceKm={form.distance_km}
               onChange={(path, name) => { setVal('route_file_path', path); setVal('route_file_name', name); trackUpload('route', path); }}
-              onClear={() => { setVal('route_file_path', ''); setVal('route_file_name', ''); }} />
+              onClear={makeOnClear('route', form.route_file_path, () => { setVal('route_file_path', ''); setVal('route_file_name', ''); })} />
           </Field>
 
           {/* ── REGISTRATION ───────────────────────────────────────── */}
@@ -1071,7 +1124,7 @@ export default function RaceFormPage() {
             <Field label="Attachment (optional — PDF)">
               <PdfUploader filePath={form.attachment_path} fileName={form.attachment_name} userId={userId}
                 onChange={(path, name) => { setVal('attachment_path', path); setVal('attachment_name', name); trackUpload('attachment', path); }}
-                onClear={() => { setVal('attachment_path', ''); setVal('attachment_name', ''); }} />
+                onClear={makeOnClear('attachment', form.attachment_path, () => { setVal('attachment_path', ''); setVal('attachment_name', ''); })} />
             </Field>
           </div>
 
@@ -1150,7 +1203,7 @@ export default function RaceFormPage() {
             <Field label="Attachment (optional — PDF)">
               <PdfUploader filePath={form.rpc_attachment_path} fileName={form.rpc_attachment_name} userId={userId}
                 onChange={(path, name) => { setVal('rpc_attachment_path', path); setVal('rpc_attachment_name', name); trackUpload('rpc_attachment', path); }}
-                onClear={() => { setVal('rpc_attachment_path', ''); setVal('rpc_attachment_name', ''); }} />
+                onClear={makeOnClear('rpc_attachment', form.rpc_attachment_path, () => { setVal('rpc_attachment_path', ''); setVal('rpc_attachment_name', ''); })} />
             </Field>
           </div>
 
@@ -1215,7 +1268,7 @@ export default function RaceFormPage() {
                 userId={userId}
                 distanceKm={form.distance_km}
                 onChange={(path, name) => { setVal('result_file_path', path); setVal('result_file_name', name); trackUpload('result', path); }}
-                onClear={() => { setVal('result_file_path', ''); setVal('result_file_name', ''); }}
+                onClear={makeOnClear('result', form.result_file_path, () => { setVal('result_file_path', ''); setVal('result_file_name', ''); })}
                 onParsed={parsed => {
                   if (parsed.distanceKm    != null) setVal('actual_distance_km', String(parsed.distanceKm));
                   if (parsed.elevationGainM != null) setVal('elevation_gain_m', String(parsed.elevationGainM));

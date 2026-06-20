@@ -15,6 +15,15 @@ function fmtTime(sec) {
     : `${m}:${String(s).padStart(2,'0')}`;
 }
 
+// Returns "M:SS /km" pace string given finish time in seconds and distance in km
+function paceStr(sec, distKm) {
+  if (!sec || !distKm || distKm <= 0) return null;
+  const paceS = Math.round(sec / distKm);
+  const m = Math.floor(paceS / 60);
+  const s = paceS % 60;
+  return `${m}:${String(s).padStart(2,'0')} /km`;
+}
+
 function fmtDist(km) {
   if (!km) return '—';
   return km >= 1000 ? `${(km/1000).toFixed(1)}k km` : `${parseFloat(km).toFixed(1)} km`;
@@ -77,14 +86,19 @@ export default function DashboardPage() {
         <div className="card">
           <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Personal bests</div>
           {[
-            { label: '5 km',          value: fmtTime(stats?.best_5k) },
-            { label: '10 km',         value: fmtTime(stats?.best_10k) },
-            { label: 'Half marathon', value: fmtTime(stats?.best_half) },
-            { label: 'Marathon',      value: fmtTime(stats?.best_marathon) },
+            { label: '5 km',          sec: stats?.best_5k,       distKm: 5 },
+            { label: '10 km',         sec: stats?.best_10k,      distKm: 10 },
+            { label: 'Half marathon', sec: stats?.best_half,     distKm: 21.0975 },
+            { label: 'Marathon',      sec: stats?.best_marathon, distKm: 42.195 },
           ].map(pb => (
-            <div key={pb.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-border)' }}>
-              <span style={{ color: 'var(--color-text-muted)' }}>{pb.label}</span>
-              <span style={{ fontWeight: 500 }}>{pb.value}</span>
+            <div key={pb.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-border)', gap: 8 }}>
+              <span style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>{pb.label}</span>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontWeight: 500 }}>{pb.sec ? fmtTime(pb.sec) : '—'}</span>
+                {paceStr(pb.sec, pb.distKm) && (
+                  <div style={{ fontSize: 11, color: 'var(--color-text-hint)', marginTop: 1 }}>{paceStr(pb.sec, pb.distKm)}</div>
+                )}
+              </div>
             </div>
           ))}
         </div>

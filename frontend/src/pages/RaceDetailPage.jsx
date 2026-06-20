@@ -10,6 +10,25 @@ function fmtTime(sec) {
   return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
 }
 
+// Parse "HH:MM:SS" or "MM:SS" string to seconds
+function parseTimeStr(t) {
+  if (!t) return null;
+  const parts = t.split(':').map(Number);
+  if (parts.some(isNaN)) return null;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return null;
+}
+
+// Returns "M:SS /km" pace string
+function paceStr(sec, distKm) {
+  if (!sec || !distKm || distKm <= 0) return null;
+  const paceS = Math.round(sec / distKm);
+  const m = Math.floor(paceS / 60);
+  const s = paceS % 60;
+  return `${m}:${String(s).padStart(2,'0')} /km`;
+}
+
 // Locale-formatted number with optional decimal places and suffix
 function fmtNum(v, { decimals, suffix = '' } = {}) {
   if (v === null || v === undefined || v === '') return null;
@@ -260,7 +279,11 @@ export default function RaceDetailPage() {
           <Field label="Jersey size" value={race.jersey_size} />
           <Field label="Registered email" value={race.registered_email} />
           <Field label="Registered phone" value={race.registered_phone} />
-          <Field label="Finish time target" value={race.finish_time_target} mono />
+          <Field label="Finish time target" value={
+            race.finish_time_target
+              ? [race.finish_time_target, paceStr(parseTimeStr(race.finish_time_target), race.distance_km)].filter(Boolean).join(' · ')
+              : null
+          } mono />
           <Field label="Category" value={race.category} />
         </Section>
 
@@ -425,8 +448,16 @@ export default function RaceDetailPage() {
 
         {race.status === 'completed' && (
           <Section title="Results">
-            <Field label="Finish time (chip)" value={fmtTime(race.finish_time_seconds)} mono />
-            <Field label="Gun time" value={fmtTime(race.gun_time_seconds)} mono />
+            <Field label="Finish time (chip)" value={
+              race.finish_time_seconds
+                ? [fmtTime(race.finish_time_seconds), paceStr(race.finish_time_seconds, (race?.actual_distance_km || race.distance_km))].filter(Boolean).join(' · ')
+                : null
+            } mono />
+            <Field label="Gun time" value={
+              race.gun_time_seconds
+                ? [fmtTime(race.gun_time_seconds), paceStr(race.gun_time_seconds, (race?.actual_distance_km || race.distance_km))].filter(Boolean).join(' · ')
+                : null
+            } mono />
             <Field label="Overall" value={race.overall_place ? `${Number(race.overall_place).toLocaleString()}${race.overall_total ? ` / ${Number(race.overall_total).toLocaleString()}` : ''}` : null} />
             <Field label="Gender" value={race.gender_place ? `${Number(race.gender_place).toLocaleString()}${race.gender_total ? ` / ${Number(race.gender_total).toLocaleString()}` : ''}` : null} />
             <Field label="Age group" value={race.age_group_place ? `${Number(race.age_group_place).toLocaleString()}${race.age_group_total ? ` / ${Number(race.age_group_total).toLocaleString()}` : ''} ${race.age_group_label || ''}`.trim() : null} />

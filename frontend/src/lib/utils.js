@@ -482,3 +482,25 @@ export async function heicToJpeg(file) {
         img.src = url;
     });
 }
+
+// ── Sort key for ordering events by time ──────────────────────────────────
+// Race flag-off → RPC time → training time → type order → name
+function eventSortKey(ev) {
+    const timeStr = ev.time || '';
+    // Parse HH:MM times to minutes for sorting; non-time strings sort after
+    const timeMin = /^\d{1,2}:\d{2}/.test(timeStr)
+        ? parseInt(timeStr) * 60 + parseInt(timeStr.split(':')[1])
+        : 9999;
+    const typeOrder = { registration: 0, race: 1, rpc: 2, training: 3 };
+    return [timeMin, typeOrder[ev.type] ?? 3, ev.label];
+}
+
+export function sortedEvents(events) {
+    return [...events].sort((a, b) => {
+        const [am, at, al] = eventSortKey(a);
+        const [bm, bt, bl] = eventSortKey(b);
+        if (am !== bm) return am - bm;
+        if (at !== bt) return at - bt;
+        return al < bl ? -1 : al > bl ? 1 : 0;
+    });
+}

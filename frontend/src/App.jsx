@@ -8,10 +8,10 @@ import ActivatePage from './pages/public/ActivatePage.jsx';
 import SettingsPage from './pages/settings/SettingsPage.jsx';
 import ConfirmEmailPage from './pages/public/ConfirmEmailPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
-import RacesPage from './pages/races/RacesPage.jsx';
+import RacesPage from './pages/races/race_listing/RacesPage.jsx';
 import RaceFormPage from './pages/races/race_form/RaceFormPage.jsx';
 import RaceDetailPage from './pages/races/race_detail/RaceDetailPage.jsx';
-import CalendarPage from './pages/CalendarPage.jsx';
+import CalendarPage from './pages/calendar/CalendarPage.jsx';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();

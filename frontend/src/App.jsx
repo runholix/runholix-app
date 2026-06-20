@@ -5,12 +5,12 @@ import Layout from './components/Layout.jsx';
 import LoginPage from './pages/public/LoginPage.jsx';
 import RegisterPage from './pages/public/RegisterPage.jsx';
 import ActivatePage from './pages/public/ActivatePage.jsx';
-import SettingsPage from './pages/SettingsPage.jsx';
+import SettingsPage from './pages/settings/SettingsPage.jsx';
 import ConfirmEmailPage from './pages/public/ConfirmEmailPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import RacesPage from './pages/races/RacesPage.jsx';
 import RaceFormPage from './pages/races/race_form/RaceFormPage.jsx';
-import RaceDetailPage from './pages/races/RaceDetailPage.jsx';
+import RaceDetailPage from './pages/races/race_detail/RaceDetailPage.jsx';
 import CalendarPage from './pages/CalendarPage.jsx';
 
 function PrivateRoute({ children }) {

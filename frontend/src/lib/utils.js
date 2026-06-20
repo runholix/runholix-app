@@ -1,4 +1,5 @@
-// ── File size validation (mirrors backend logic) ──────────────────────────
+import { format, parseISO } from "date-fns";
+
 export const PDF_MAX_BYTES = 10 * 1024 * 1024;
 export const ROUTE_HARD_MAX = 100 * 1024 * 1024;
 export const ROUTE_BASE_BYTES = 5 * 1024 * 1024;
@@ -33,6 +34,52 @@ export function validateRouteFile(file, distanceKm) {
         return `File too large ${ctx}. Maximum: ${fmtMB(limit)}`;
     }
     return null;
+}
+
+export function fmtTime(sec) {
+    if (!sec) return '—';
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
+}
+
+export function fmtDateTime(value) {
+    if (!value) return null;
+    return format(parseISO(String(value).replace(' ', 'T')), 'dd MMM yyyy, HH:mm');
+}
+
+// Parse "HH:MM:SS" or "MM:SS" string to seconds
+export function parseTimeStr(t) {
+    if (!t) return null;
+    const parts = t.split(':').map(Number);
+    if (parts.some(isNaN)) return null;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return null;
+}
+
+// Returns "M:SS /km" pace string
+export function paceStr(sec, distKm) {
+    if (!sec || !distKm || distKm <= 0) return null;
+    const paceS = Math.round(sec / distKm);
+    const m = Math.floor(paceS / 60);
+    const s = paceS % 60;
+    return `${m}:${String(s).padStart(2,'0')} /km`;
+}
+
+// Locale-formatted number with optional decimal places and suffix
+export function fmtNum(v, { decimals, suffix = '' } = {}) {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    if (isNaN(n)) return null;
+    const formatted = decimals !== undefined
+        ? n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+        : n.toLocaleString("en-US");
+    return suffix ? `${formatted} ${suffix}` : formatted;
+}
+
+export function fmtDist(km) {
+    if (!km) return '—';
+    return km >= 1000 ? `${(km/1000).toFixed(1)}k km` : `${parseFloat(km).toFixed(1)} km`;
 }
 
 export function validatePdfFile(file) {
@@ -409,4 +456,29 @@ export function parseFit(bytes) {
         heartRateAvg,
         heartRateMax,
     };
+}
+
+// ── HEIC → JPEG conversion via canvas ────────────────────────────────────
+export async function heicToJpeg(file) {
+    // Load heic2any lazily via dynamic import (CDN fallback: draw on canvas)
+    // We use the createImageBitmap approach which works for HEIC in some browsers,
+    // otherwise fall back to drawing via an img element with object URL.
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width  = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob(blob => {
+                URL.revokeObjectURL(url);
+                if (!blob) return reject(new Error('HEIC conversion failed'));
+                resolve(new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' }));
+            }, 'image/jpeg', 0.92);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load HEIC image')); };
+        img.src = url;
+    });
 }

@@ -2,15 +2,15 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
 import { ThemeProvider } from './hooks/useTheme.jsx';
 import Layout from './components/Layout.jsx';
-import LoginPage from './pages/LoginPage.jsx';
-import RegisterPage from './pages/RegisterPage.jsx';
-import ActivatePage from './pages/ActivatePage.jsx';
+import LoginPage from './pages/public/LoginPage.jsx';
+import RegisterPage from './pages/public/RegisterPage.jsx';
+import ActivatePage from './pages/public/ActivatePage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
-import ConfirmEmailPage from './pages/ConfirmEmailPage.jsx';
+import ConfirmEmailPage from './pages/public/ConfirmEmailPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
-import RacesPage from './pages/RacesPage.jsx';
-import RaceFormPage from './pages/RaceFormPage.jsx';
-import RaceDetailPage from './pages/RaceDetailPage.jsx';
+import RacesPage from './pages/races/RacesPage.jsx';
+import RaceFormPage from './pages/races/race_form/RaceFormPage.jsx';
+import RaceDetailPage from './pages/races/RaceDetailPage.jsx';
 import CalendarPage from './pages/CalendarPage.jsx';
 
 function PrivateRoute({ children }) {

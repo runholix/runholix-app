@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth.jsx';
-import ThemeToggle from '../components/ThemeToggle.jsx';
-import APP_NAME from '../lib/appName.js';
+import { useAuth } from '../../hooks/useAuth.jsx';
+import ThemeToggle from '../../components/ThemeToggle.jsx';
+import APP_NAME from '../../lib/appName.js';
 
 export default function LoginPage() {
   const { login } = useAuth();

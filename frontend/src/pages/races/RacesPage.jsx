@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
-import { api } from '../lib/api.js';
+import { api } from '../../lib/api.js';
 
 // ── Page size with cross-breakpoint page recalculation ────────────────────
 function usePageSize(page, setPage) {

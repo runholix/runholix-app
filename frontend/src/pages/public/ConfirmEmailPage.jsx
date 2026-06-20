@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api.js';
-import ThemeToggle from '../components/ThemeToggle.jsx';
+import { api } from '../../lib/api.js';
+import ThemeToggle from '../../components/ThemeToggle.jsx';
 
 export default function ConfirmEmailPage() {
   const [params]   = useSearchParams();

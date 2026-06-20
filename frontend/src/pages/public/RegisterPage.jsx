@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth.jsx';
-import { api } from '../lib/api.js';
-import ThemeToggle from '../components/ThemeToggle.jsx';
+import { useAuth } from '../../hooks/useAuth.jsx';
+import { api } from '../../lib/api.js';
+import ThemeToggle from '../../components/ThemeToggle.jsx';
 
 export default function RegisterPage() {
   const { register } = useAuth();

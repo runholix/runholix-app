@@ -1,12 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
 
-const TIMEZONES = Intl.supportedValuesOf('timeZone');
+const TIMEZONES = Intl.supportedValuesOf('timeZone')?.map((tz) => {
+    try {
+        // Format the current time to extract the numeric offset component
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: tz,
+            timeZoneName: 'longOffset'
+        }).formatToParts(new Date());
+
+        const offsetPart = parts.find(p => p.type === 'timeZoneName');
+        const offset = offsetPart ? offsetPart.value : 'GMT+00:00';
+
+        return { tz, offset };
+    } catch (e) {
+        return { tz, offset: 'Error' };
+    }
+});
 
 export default function TimezoneSelect({
   timezone,
   setTimezone,
   onFilteredChange,
   onTimezoneExistChange,
+  label=undefined
 }) {
   const [search, setSearch] = useState(timezone || 'UTC');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -14,10 +30,14 @@ export default function TimezoneSelect({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return TIMEZONES;
-    return TIMEZONES.filter(tz => tz.toLowerCase().includes(q));
+    return TIMEZONES.filter(tz => tz?.tz?.toLowerCase().includes(q));
   }, [search]);
 
-  const timezoneExist = useMemo(() => TIMEZONES.includes(timezone), [timezone]);
+  const timezoneExist = useMemo(() => TIMEZONES.some((tz) => tz?.tz === timezone), [timezone]);
+
+  useEffect(() => {
+    setSearch(timezone);
+  }, [timezone]);
 
   useEffect(() => {
     onFilteredChange?.(filtered);
@@ -29,13 +49,12 @@ export default function TimezoneSelect({
 
   const selectTimezone = (tz) => {
     setTimezone(tz);
-    setSearch(tz);
     setShowDropdown(false);
   };
 
   return (
     <div className="form-group" style={{ position: 'relative' }}>
-      <label className="form-label">Default timezone</label>
+      <label className="form-label">{label || "Timezone"}</label>
       <input
         value={search}
         onFocus={() => setShowDropdown(true)}
@@ -67,26 +86,27 @@ export default function TimezoneSelect({
             zIndex: 20,
           }}
         >
-          {filtered.slice(0, 40).map(tz => (
-            <div
-              key={tz}
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => selectTimezone(tz)}
-              style={{
-                padding: '8px 12px',
-                fontSize: 13,
-                cursor: 'pointer',
-                background: timezone === tz ? 'var(--color-primary-bg)' : '',
-                color: timezone === tz ? 'var(--color-primary)' : '',
-              }}
-              onMouseEnter={e => {
-                if (timezone !== tz) e.currentTarget.style.background = 'var(--color-bg)';
+              {filtered.slice(0, 40).map(tz => (
+                <div
+                  key={tz?.tz}
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => selectTimezone(tz?.tz)}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    background: timezone === tz?.tz ? 'var(--color-primary-bg)' : '',
+                    color: timezone === tz?.tz ? 'var(--color-primary)' : '',
+                  }}
+                  onMouseEnter={e => {
+                if (timezone !== tz?.tz) e.currentTarget.style.background = 'var(--color-bg)';
               }}
               onMouseLeave={e => {
-                if (timezone !== tz) e.currentTarget.style.background = '';
+                if (timezone !== tz?.tz) e.currentTarget.style.background = '';
               }}
             >
-              {tz}
+                <div style={{ fontWeight: 500 }}>{tz.tz}</div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-hint)' }}>{tz.offset}</div>
             </div>
           ))}
         </div>

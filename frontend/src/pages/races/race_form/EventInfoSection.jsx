@@ -1,5 +1,6 @@
 import Field from "../../../components/Field.jsx";
 import RouteUploader from "../../../components/RouteUploader.jsx";
+import TimezoneSelect from "../../../components/TimezoneSelect.jsx";
 
 export default function EventInfoSection({ isTrail, setVal, trackUpload, makeOnClear, set, form, userId, raceDateExists }) {
     return (
@@ -62,6 +63,7 @@ export default function EventInfoSection({ isTrail, setVal, trackUpload, makeOnC
                 <Field label="Venue / location"><input value={form.location} onChange={set('location')} placeholder="Monas area" /></Field>
                 <Field label="Race website URL"><input type="url" value={form.website_url} onChange={set('website_url')} placeholder="https://…" /></Field>
                 <Field label="Instagram URL"><input type="url" value={form.instagram_url} onChange={set('instagram_url')} placeholder="https://www.instagram.com/racehandle" /></Field>
+                <TimezoneSelect label="Race timezone" timezone={form.timezone} setTimezone={tz => setVal('timezone', tz)} />
             </div>
 
             {/* Trail-only: ITRA URL */}

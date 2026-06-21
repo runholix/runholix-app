@@ -2,6 +2,7 @@ import { Field, Section } from "./RaceDetailPage.jsx";
 import {api} from "../../../lib/api.js";
 
 export default function EventInfoSection({ user, race }) {
+    const showTimezone = race.timezone && race.timezone !== user?.timezone;
     return (
         <>
             <Section title="Event info">
@@ -10,6 +11,7 @@ export default function EventInfoSection({ user, race }) {
                 <Field label="Location" value={race.location} />
                 <Field label="City" value={race.city} />
                 <Field label="Country" value={race.country} />
+                {showTimezone && <Field label="Timezone" value={race.timezone} />}
 
             </Section>
 

@@ -112,6 +112,7 @@ async function startWithMigration() {
         route_file_path   TEXT,
         route_file_name   TEXT,
         location TEXT, city TEXT, country TEXT, website_url TEXT, instagram_url TEXT,
+        timezone TEXT,
 
         -- Status
         status TEXT NOT NULL DEFAULT 'registered'
@@ -186,6 +187,7 @@ async function startWithMigration() {
       ALTER TABLE races ADD COLUMN IF NOT EXISTS route_file_path    TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS route_file_name    TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS bib_name           TEXT;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS timezone           TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS jersey_size        TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS registered_email   TEXT;
       ALTER TABLE races ADD COLUMN IF NOT EXISTS registered_phone   TEXT;

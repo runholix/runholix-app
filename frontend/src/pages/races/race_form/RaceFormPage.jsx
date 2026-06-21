@@ -9,12 +9,14 @@ import RegistrationSection from "./RegistrationSection.jsx";
 import DistanceCategorySection from "./DistanceCategorySection.jsx";
 import RacePackCollectionSection from "./RacePackCollectionSection.jsx";
 import ResultSection from "./ResultSection.jsx";
+import {useAuth} from "../../../hooks/useAuth.jsx";
 
 // ── Default state ─────────────────────────────────────────────────────────
 const EMPTY = {
   event_name: '', race_date: '', registration_datetime: '', flag_off_time: '', cutoff_time: '',
   route_file_path: '', route_file_name: '',
   location: '', city: '', country: '', website_url: '', instagram_url: '',
+  timezone: '',
   itra_url: '',
   status: 'registered', registration_fee: '', registration_currency: 'USD',
   bib_number: '', bib_name: '', jersey_size: '',
@@ -42,11 +44,16 @@ const EMPTY = {
 // ── Main form ─────────────────────────────────────────────────────────────
 export default function RaceFormPage() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const userId = user.id;
   const navigate = useNavigate();
   const isEdit = !!id;
-  const [form, setForm] = useState(EMPTY);
+
+  const [form, setForm] = useState({
+    ...EMPTY,
+    timezone: user?.timezone || 'UTC'
+  });
   const [dirty, setDirty] = useState(false);
-  const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -119,7 +126,6 @@ export default function RaceFormPage() {
   };
 
   useEffect(() => {
-    api.me().then(u => setUserId(u.id)).catch(() => {});
     if (!isEdit) return;
     api.getRace(id).then(race => {
       const raceDate = race.race_date?.slice(0,10) || '';
@@ -130,7 +136,7 @@ export default function RaceFormPage() {
         flag_off_time: race.flag_off_time || '', cutoff_time: race.cutoff_time || '',
         route_file_path: race.route_file_path || '', route_file_name: race.route_file_name || '',
         location: race.location || '', city: race.city || '', country: race.country || '',
-        website_url: race.website_url || '', instagram_url: race.instagram_url || '', itra_url: race.itra_url || '',
+        website_url: race.website_url || '', instagram_url: race.instagram_url || '', timezone: race.timezone || user?.timezone || 'UTC', itra_url: race.itra_url || '',
         status: race.status || 'registered',
         registration_fee: race.registration_fee || '', registration_currency: race.registration_currency || 'USD',
         bib_number: race.bib_number || '', bib_name: race.bib_name || '',

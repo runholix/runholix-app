@@ -30,7 +30,7 @@ export default function TimezoneSection({ user, onUpdate }) {
   return (
     <Section title="Timezone" description="Used for scheduling and accurate email reminder timing.">
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <TimezoneSelect timezone={timezone} setTimezone={setTimezone} onFilteredChange={setFiltered} onTimezoneExistChange={setTimezoneExist} />
+        <TimezoneSelect label="Default timezone" timezone={timezone} setTimezone={setTimezone} onFilteredChange={setFiltered} onTimezoneExistChange={setTimezoneExist} />
         <div>
           <button type="submit" className="btn btn-primary btn-sm" disabled={saving || !timezone.trim() || timezone === user?.timezone || filtered.length === 0 || !timezoneExist}>
             {saving ? 'Saving…' : 'Update timezone'}

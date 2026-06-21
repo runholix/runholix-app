@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS races (
   city TEXT,
   country TEXT,
   website_url TEXT,
+  timezone TEXT,
 
   -- Registration
   status TEXT NOT NULL DEFAULT 'registered'

@@ -4,6 +4,7 @@ import AvatarSection from "./AvatarSection.jsx";
 import NameSection from "./NameSection.jsx";
 import EmailSection from "./EmailSection.jsx";
 import PasswordSection from "./PasswordSection.jsx";
+import PasskeySection from "./PasskeySection.jsx";
 import CalendarFeedSection from "./CalendarFeedSection.jsx";
 
 // ── Generic section card ───────────────────────────────────────────────────
@@ -40,6 +41,7 @@ export default function SettingsPage() {
       <NameSection     user={currentUser} onUpdate={u => handleUpdate({ name: u.name })} />
       <EmailSection    user={currentUser} />
       <PasswordSection />
+      <PasskeySection />
       <CalendarFeedSection />
     </div>
   );

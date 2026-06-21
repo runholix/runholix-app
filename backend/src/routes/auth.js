@@ -2,14 +2,81 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  generateAuthenticationOptions,
+  generateRegistrationOptions,
+  verifyAuthenticationResponse,
+  verifyRegistrationResponse,
+} from '@simplewebauthn/server';
+import { isoBase64URL, isoUint8Array } from '@simplewebauthn/server/helpers';
 import pool from '../db/pool.js';
-import { emailEnabled, sendActivationEmail, sendWelcomeEmail, sendPasswordChangedEmail, sendEmailChangeConfirmation, sendAdminApprovalRequest, sendAccountApproved } from '../email.js';
+import { emailEnabled, sendActivationEmail, sendWelcomeEmail, sendPasswordChangedEmail, sendEmailChangeConfirmation, sendAdminApprovalRequest, sendAccountApproved, sendPasskeyAddedEmail, sendPasskeyRemovedEmail } from '../email.js';
 
 const router = Router();
 
 import { requireAuth } from '../middleware/auth.js';
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim();
+const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+const RP_NAME = process.env.APP_NAME || 'Runholix';
+const RP_ID = process.env.WEBAUTHN_RP_ID || new URL(APP_URL).hostname;
+const EXPECTED_ORIGIN = process.env.WEBAUTHN_ORIGIN || APP_URL;
+const authAttempts = new Map();
+
+function authRateLimit(req, res, key, max = 10, windowMs = 10 * 60 * 1000) {
+  const now = Date.now();
+  const bucketKey = `${req.ip}:${key}`;
+  const bucket = authAttempts.get(bucketKey) || { count: 0, resetAt: now + windowMs };
+  if (bucket.resetAt <= now) {
+    bucket.count = 0;
+    bucket.resetAt = now + windowMs;
+  }
+  bucket.count += 1;
+  authAttempts.set(bucketKey, bucket);
+  if (bucket.count > max) {
+    res.status(429).json({ error: 'Too many attempts. Please try again later.' });
+    return false;
+  }
+  return true;
+}
+
+function signUser(user) {
+  return jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+}
+
+function publicUser(user) {
+  return { id: user.user_id || user.id, email: user.email, name: user.name, avatar_path: user.avatar_path };
+}
+
+async function saveChallenge({ userId = null, email = null, challenge, type }) {
+  await pool.query(
+    `INSERT INTO passkey_challenges (user_id, email, challenge, type, expires_at)
+     VALUES ($1, $2, $3, $4, NOW() + INTERVAL '5 minutes')`,
+    [userId, email, challenge, type]
+  );
+}
+
+async function consumeChallenge({ challenge, type, userId = null, email = null }) {
+  const params = [challenge, type];
+  let query = `DELETE FROM passkey_challenges
+               WHERE challenge=$1 AND type=$2 AND expires_at > NOW()`;
+  if (userId) { params.push(userId); query += ` AND user_id=$${params.length}`; }
+  if (email) { params.push(email); query += ` AND email=$${params.length}`; }
+  query += ' RETURNING challenge';
+  const { rows } = await pool.query(query, params);
+  return rows[0]?.challenge || null;
+}
+
+async function verifyCurrentPassword(userId, password) {
+  if (!password) return null;
+  const { rows } = await pool.query(
+    'SELECT id, email, name, password_hash FROM users WHERE id=$1 AND is_active=TRUE',
+    [userId]
+  );
+  if (!rows.length) return null;
+  const ok = await bcrypt.compare(password, rows[0].password_hash);
+  return ok ? rows[0] : null;
+}
 
 // ── REGISTER ──────────────────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
@@ -191,10 +258,12 @@ router.post('/resend-activation', async (req, res) => {
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!authRateLimit(req, res, `login:${normalizedEmail}`, 8)) return;
   try {
     const { rows } = await pool.query(
       'SELECT * FROM users WHERE email = $1',
-      [email.toLowerCase().trim()]
+      [normalizedEmail]
     );
     if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
     const ok = await bcrypt.compare(password, rows[0].password_hash);
@@ -207,6 +276,84 @@ router.post('/login', async (req, res) => {
     }
     const token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name, avatar_path: rows[0].avatar_path } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/passkeys/login/options', async (req, res) => {
+  const email = String(req.body.email || '').toLowerCase().trim();
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  if (!authRateLimit(req, res, `passkey-options:${email}`, 12)) return;
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id
+       FROM users u
+       JOIN passkeys p ON p.user_id = u.id
+       WHERE u.email=$1 AND u.is_active=TRUE
+       GROUP BY u.id`,
+      [email]
+    );
+    const { rows: passkeys } = rows.length
+      ? await pool.query(
+        'SELECT credential_id, transports FROM passkeys WHERE user_id=$1',
+        [rows[0].id]
+      )
+      : { rows: [] };
+    const options = await generateAuthenticationOptions({
+      rpID: RP_ID,
+      allowCredentials: passkeys.map(p => ({ id: p.credential_id, transports: p.transports || [] })),
+      userVerification: 'required',
+    });
+    await saveChallenge({ email, challenge: options.challenge, type: 'authentication' });
+    res.json(options);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/passkeys/login/verify', async (req, res) => {
+  const email = String(req.body.email || '').toLowerCase().trim();
+  const credential = req.body.credential;
+  if (!email || !credential) return res.status(400).json({ error: 'Email and credential required' });
+  if (!authRateLimit(req, res, `passkey-verify:${email}`, 8)) return;
+  try {
+    const clientData = JSON.parse(Buffer.from(credential.response.clientDataJSON, 'base64url').toString('utf8'));
+    const { rows } = await pool.query(
+      `SELECT p.*, u.id AS user_id, u.email, u.name, u.avatar_path, u.is_active
+       FROM passkeys p
+       JOIN users u ON u.id = p.user_id
+       WHERE u.email=$1 AND p.credential_id=$2`,
+      [email, credential.id]
+    );
+    if (!rows.length || !rows[0].is_active) return res.status(401).json({ error: 'Invalid passkey' });
+    const passkey = rows[0];
+    const expectedChallenge = await consumeChallenge({ email, challenge: clientData.challenge, type: 'authentication' });
+    if (!expectedChallenge) return res.status(400).json({ error: 'Invalid or expired passkey challenge' });
+
+    const verification = await verifyAuthenticationResponse({
+      response: credential,
+      expectedChallenge,
+      expectedOrigin: EXPECTED_ORIGIN,
+      expectedRPID: RP_ID,
+      requireUserVerification: true,
+      credential: {
+        id: passkey.credential_id,
+        publicKey: isoBase64URL.toBuffer(passkey.public_key),
+        counter: Number(passkey.counter),
+        transports: passkey.transports || [],
+      },
+    });
+    if (!verification.verified) return res.status(401).json({ error: 'Passkey verification failed' });
+
+    await pool.query(
+      'UPDATE passkeys SET counter=$1, last_used_at=NOW() WHERE id=$2',
+      [verification.authenticationInfo.newCounter, passkey.id]
+    );
+    const user = publicUser(passkey);
+    res.json({ token: signUser(user), user });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -265,6 +412,113 @@ router.put('/password', requireAuth, async (req, res) => {
     // Notify via email (non-blocking)
     sendPasswordChangedEmail(rows[0].email, rows[0].name).catch(() => {});
 
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.get('/passkeys', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, created_at, last_used_at
+       FROM passkeys
+       WHERE user_id=$1
+       ORDER BY created_at DESC`,
+      [req.userId]
+    );
+    res.json(rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/passkeys/register/options', requireAuth, async (req, res) => {
+  const currentPassword = req.body.current_password;
+  if (!currentPassword) return res.status(400).json({ error: 'Current password is required' });
+  try {
+    const user = await verifyCurrentPassword(req.userId, currentPassword);
+    if (!user) return res.status(401).json({ error: 'Current password is incorrect' });
+
+    const { rows: passkeys } = await pool.query(
+      'SELECT credential_id, transports FROM passkeys WHERE user_id=$1 ORDER BY created_at DESC',
+      [req.userId]
+    );
+    if (passkeys.length >= 3) return res.status(400).json({ error: 'You can register up to 3 passkeys.' });
+
+    const options = await generateRegistrationOptions({
+      rpName: RP_NAME,
+      rpID: RP_ID,
+      userID: isoUint8Array.fromUTF8String(user.id),
+      userName: user.email,
+      userDisplayName: user.name,
+      excludeCredentials: passkeys.map(p => ({ id: p.credential_id, transports: p.transports || [] })),
+      authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
+      attestationType: 'none',
+    });
+    await saveChallenge({ userId: req.userId, challenge: options.challenge, type: 'registration' });
+    res.json(options);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/passkeys/register/verify', requireAuth, async (req, res) => {
+  const credential = req.body.credential;
+  const requestedName = String(req.body.name || '').trim();
+  if (!credential) return res.status(400).json({ error: 'Credential required' });
+  try {
+    const clientData = JSON.parse(Buffer.from(credential.response.clientDataJSON, 'base64url').toString('utf8'));
+    const { rows: users } = await pool.query('SELECT id, email, name FROM users WHERE id=$1', [req.userId]);
+    if (!users.length) return res.status(404).json({ error: 'User not found' });
+
+    const { rows: countRows } = await pool.query('SELECT COUNT(*)::int AS count FROM passkeys WHERE user_id=$1', [req.userId]);
+    if (countRows[0].count >= 3) return res.status(400).json({ error: 'You can register up to 3 passkeys.' });
+    const expectedChallenge = await consumeChallenge({ userId: req.userId, challenge: clientData.challenge, type: 'registration' });
+    if (!expectedChallenge) return res.status(400).json({ error: 'Invalid or expired passkey challenge' });
+
+    const verification = await verifyRegistrationResponse({
+      response: credential,
+      expectedChallenge,
+      expectedOrigin: EXPECTED_ORIGIN,
+      expectedRPID: RP_ID,
+      requireUserVerification: true,
+    });
+    if (!verification.verified || !verification.registrationInfo) {
+      return res.status(400).json({ error: 'Passkey registration failed' });
+    }
+
+    const { credential: registeredCredential } = verification.registrationInfo;
+    const passkeyName = requestedName || 'Passkey';
+    const { rows } = await pool.query(
+      `INSERT INTO passkeys (user_id, credential_id, public_key, counter, name, transports)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, created_at, last_used_at`,
+      [
+        req.userId,
+        registeredCredential.id,
+        isoBase64URL.fromBuffer(registeredCredential.publicKey),
+        registeredCredential.counter || 0,
+        passkeyName,
+        registeredCredential.transports || credential.response.transports || [],
+      ]
+    );
+    sendPasskeyAddedEmail(users[0].email, users[0].name, passkeyName).catch(() => {});
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'This passkey is already registered.' });
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.delete('/passkeys/:id', requireAuth, async (req, res) => {
+  const user = await verifyCurrentPassword(req.userId, req.body.current_password);
+  if (!user) return res.status(401).json({ error: 'Current password is incorrect' });
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM passkeys p
+       USING users u
+       WHERE p.id=$1 AND p.user_id=$2 AND u.id=p.user_id
+       RETURNING p.name, u.email, u.name AS user_name`,
+      [req.params.id, req.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Passkey not found' });
+    sendPasskeyRemovedEmail(rows[0].email, rows[0].user_name, rows[0].name).catch(() => {});
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });

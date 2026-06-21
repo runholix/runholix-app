@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { startAuthentication } from '@simplewebauthn/browser';
 import { useAuth } from '../../hooks/useAuth.jsx';
 import ThemeToggle from '../../components/ThemeToggle.jsx';
 import APP_NAME from '../../lib/appName.js';
+import { api } from '../../lib/api.js';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
 
   // Read the intended destination from ?redirect=
   const params = new URLSearchParams(location.search);
@@ -27,6 +30,25 @@ export default function LoginPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loginWithPasskey = async () => {
+    const email = form.email.trim();
+    if (!email) return setError('Enter your email first.');
+    if (!window.PublicKeyCredential) return setError('This browser does not support passkeys.');
+    setError('');
+    setPasskeyLoading(true);
+    try {
+      const options = await api.passkeyLoginOptions({ email });
+      const credential = await startAuthentication({ optionsJSON: options });
+      const data = await api.verifyPasskeyLogin({ email, credential });
+      loginWithToken(data);
+      navigate(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/', { replace: true });
+    } catch (err) {
+      setError(err.message || 'Passkey sign in failed.');
+    } finally {
+      setPasskeyLoading(false);
     }
   };
 
@@ -73,6 +95,10 @@ export default function LoginPage() {
           </div>
           <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center', marginTop: 4 }} disabled={loading}>
             {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+          <button type="button" className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={loginWithPasskey} disabled={loading || passkeyLoading}>
+            <i className="ti ti-key" />
+            {passkeyLoading ? 'Checking passkey...' : 'Sign in with passkey'}
           </button>
         </form>
 

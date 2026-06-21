@@ -126,6 +126,24 @@ export async function sendPasswordChangedEmail(to, name) {
   `));
 }
 
+export async function sendPasskeyAddedEmail(to, name, passkeyName) {
+  await send(to, `A passkey was added to your ${APP_NAME} account`, wrap('Passkey added', `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>A new passkey named <strong>${passkeyName}</strong> was added to your ${APP_NAME} account.</p>
+    <p>If you did not make this change, remove the passkey from account settings and change your password immediately.</p>
+    <a href="${APP_URL}/settings" class="btn">Review security settings</a>
+  `));
+}
+
+export async function sendPasskeyRemovedEmail(to, name, passkeyName) {
+  await send(to, `A passkey was removed from your ${APP_NAME} account`, wrap('Passkey removed', `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>The passkey named <strong>${passkeyName}</strong> was removed from your ${APP_NAME} account.</p>
+    <p>If you did not make this change, change your password immediately and review your account settings.</p>
+    <a href="${APP_URL}/settings" class="btn">Review security settings</a>
+  `));
+}
+
 // ── Email change confirmation ─────────────────────────────────────────────
 export async function sendEmailChangeConfirmation(to, name, token) {
   const link = `${APP_URL}/confirm-email?token=${encodeURIComponent(token)}`;

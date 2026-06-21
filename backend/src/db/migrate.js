@@ -70,6 +70,28 @@ CREATE TABLE IF NOT EXISTS races (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS passkeys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  credential_id TEXT UNIQUE NOT NULL,
+  public_key TEXT NOT NULL,
+  counter BIGINT NOT NULL DEFAULT 0,
+  name TEXT NOT NULL,
+  transports TEXT[] NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS passkey_challenges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT,
+  challenge TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('registration','authentication')),
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS race_gear (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -89,6 +111,8 @@ CREATE TABLE IF NOT EXISTS race_gear_used (
 CREATE INDEX IF NOT EXISTS idx_races_user_id ON races(user_id);
 CREATE INDEX IF NOT EXISTS idx_races_race_date ON races(race_date DESC);
 CREATE INDEX IF NOT EXISTS idx_races_status ON races(status);
+CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
+CREATE INDEX IF NOT EXISTS idx_passkey_challenges_lookup ON passkey_challenges(challenge, type);
 `;
 
 async function migrate() {

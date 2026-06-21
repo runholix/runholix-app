@@ -69,7 +69,7 @@ export default function PasswordSection() {
                     </div>
                 </div>
                 <div>
-                    <button type="submit" className="btn btn-primary btn-sm" disabled={saving || !form.current || !form.next || !form.confirm}>
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
                         {saving ? 'Updating…' : 'Update password'}
                     </button>
                 </div>

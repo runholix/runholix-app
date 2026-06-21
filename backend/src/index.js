@@ -64,6 +64,30 @@ async function startWithMigration() {
       -- Existing users (pre-email feature) are grandfathered in as active
       UPDATE users SET is_active = TRUE WHERE is_active = FALSE AND activation_token IS NULL;
 
+      CREATE TABLE IF NOT EXISTS passkeys (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        credential_id TEXT UNIQUE NOT NULL,
+        public_key TEXT NOT NULL,
+        counter BIGINT NOT NULL DEFAULT 0,
+        name TEXT NOT NULL,
+        transports TEXT[] NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        last_used_at TIMESTAMPTZ
+      );
+
+      CREATE TABLE IF NOT EXISTS passkey_challenges (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        email TEXT,
+        challenge TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('registration','authentication')),
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
+      CREATE INDEX IF NOT EXISTS idx_passkey_challenges_lookup ON passkey_challenges(challenge, type);
+
       CREATE TABLE IF NOT EXISTS races (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

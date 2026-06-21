@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
 import { ThemeProvider } from './hooks/useTheme.jsx';
 import Layout from './components/Layout.jsx';
 import LoginPage from './pages/public/LoginPage.jsx';
+import ForgotPassword from './pages/public/ForgotPassword.jsx';
 import RegisterPage from './pages/public/RegisterPage.jsx';
 import ActivatePage from './pages/public/ActivatePage.jsx';
 import SettingsPage from './pages/settings/SettingsPage.jsx';
@@ -37,6 +38,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
           <Route path="/activate" element={<ActivatePage />} />
           <Route path="/confirm-email" element={<ConfirmEmailPage />} />

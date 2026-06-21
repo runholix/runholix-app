@@ -8,6 +8,14 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   name TEXT NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  activation_token TEXT,
+  activation_expires TIMESTAMPTZ,
+  reset_token TEXT,
+  reset_expires TIMESTAMPTZ,
+  reset_last_sent_at TIMESTAMPTZ,
+  reset_sent_count_24h INTEGER NOT NULL DEFAULT 0,
+  reset_sent_window_start TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

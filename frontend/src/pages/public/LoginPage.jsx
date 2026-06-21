@@ -102,8 +102,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>
-          No account? <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: 500 }}>Register</Link>
+        <p style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', flexDirection: 'column' }}>
+          <Link to="/forgot-password" style={{ color: 'var(--color-primary)', fontWeight: 500 }}>Forgot password?</Link>
+          <span>No account? <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: 500 }}>Register</Link></span>
         </p>
       </div>
     </div>

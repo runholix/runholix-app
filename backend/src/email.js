@@ -126,6 +126,17 @@ export async function sendPasswordChangedEmail(to, name) {
   `));
 }
 
+export async function sendPasswordResetEmail(to, name, token) {
+  const link = `${APP_URL}/forgot-password?token=${encodeURIComponent(token)}`;
+  await send(to, `Reset your ${APP_NAME} password`, wrap('Reset your password', `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>We received a request to reset your ${APP_NAME} password.</p>
+    <a href="${link}" class="btn">Reset password</a>
+    <p style="font-size:12px;color:#9b9890">This link expires in 30 minutes. If you did not request a reset, ignore this email.</p>
+    <p style="font-size:12px;color:#9b9890">Or copy: ${link}</p>
+  `));
+}
+
 export async function sendPasskeyAddedEmail(to, name, passkeyName) {
   await send(to, `A passkey was added to your ${APP_NAME} account`, wrap('Passkey added', `
     <p>Hi <strong>${name}</strong>,</p>

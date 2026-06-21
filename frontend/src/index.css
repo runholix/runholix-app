@@ -340,3 +340,12 @@ tbody tr:hover td { background: var(--color-bg); }
   font-size: 13px;
   margin-bottom: 20px;
 }
+
+.alert-success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 20px;
+}

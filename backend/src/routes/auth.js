@@ -10,7 +10,7 @@ import {
 } from '@simplewebauthn/server';
 import { isoBase64URL, isoUint8Array } from '@simplewebauthn/server/helpers';
 import pool from '../db/pool.js';
-import { emailEnabled, sendActivationEmail, sendWelcomeEmail, sendPasswordChangedEmail, sendEmailChangeConfirmation, sendAdminApprovalRequest, sendAccountApproved, sendPasskeyAddedEmail, sendPasskeyRemovedEmail } from '../email.js';
+import { emailEnabled, sendActivationEmail, sendWelcomeEmail, sendPasswordChangedEmail, sendPasswordResetEmail, sendEmailChangeConfirmation, sendAdminApprovalRequest, sendAccountApproved, sendPasskeyAddedEmail, sendPasskeyRemovedEmail } from '../email.js';
 
 const router = Router();
 
@@ -21,6 +21,8 @@ const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 const RP_NAME = process.env.APP_NAME || 'Runholix';
 const RP_ID = process.env.WEBAUTHN_RP_ID || new URL(APP_URL).hostname;
 const EXPECTED_ORIGIN = process.env.WEBAUTHN_ORIGIN || APP_URL;
+const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
+const PASSWORD_RESET_WINDOW_MS = 24 * 60 * 60 * 1000;
 const authAttempts = new Map();
 
 function authRateLimit(req, res, key, max = 10, windowMs = 10 * 60 * 1000) {
@@ -38,6 +40,22 @@ function authRateLimit(req, res, key, max = 10, windowMs = 10 * 60 * 1000) {
     return false;
   }
   return true;
+}
+
+function passwordResetPolicy(row) {
+  const now = Date.now();
+  const lastSentAt = row?.reset_last_sent_at ? new Date(row.reset_last_sent_at).getTime() : null;
+  const windowStartAt = row?.reset_sent_window_start ? new Date(row.reset_sent_window_start).getTime() : null;
+  const windowExpired = !windowStartAt || (now - windowStartAt) >= PASSWORD_RESET_WINDOW_MS;
+  const sentCount = windowExpired ? 0 : Number(row?.reset_sent_count_24h || 0);
+  const cooldownRemainingMs = lastSentAt ? Math.max(0, PASSWORD_RESET_COOLDOWN_MS - (now - lastSentAt)) : 0;
+  const windowRemainingMs = windowExpired ? 0 : Math.max(0, PASSWORD_RESET_WINDOW_MS - (now - windowStartAt));
+  return {
+    cooldownSeconds: Math.ceil(cooldownRemainingMs / 1000),
+    remainingResends: Math.max(0, 3 - sentCount),
+    dailyLimitReached: sentCount >= 3,
+    windowResetSeconds: Math.ceil(windowRemainingMs / 1000),
+  };
 }
 
 function signUser(user) {
@@ -255,6 +273,100 @@ router.post('/resend-activation', async (req, res) => {
 });
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────
+// ── FORGOT PASSWORD ────────────────────────────────────────────────────────
+router.post('/forgot-password', async (req, res) => {
+  const email = String(req.body.email || '').toLowerCase().trim();
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, email, name, is_active, reset_last_sent_at, reset_sent_count_24h, reset_sent_window_start
+       FROM users
+       WHERE email = $1`,
+      [email]
+    );
+    const user = rows[0];
+    if (!user || !user.is_active) {
+      return res.json({ message: 'If that email exists, a password reset link has been sent.' });
+    }
+
+    const policy = passwordResetPolicy(user);
+    if (policy.dailyLimitReached || policy.cooldownSeconds > 0) {
+      return res.status(429).json({
+        error: policy.dailyLimitReached
+          ? 'Password reset limit reached for today. Please try again later.'
+          : 'Please wait before requesting another password reset email.',
+        ...policy,
+      });
+    }
+
+    const token = uuidv4();
+    const expires = new Date(Date.now() + 30 * 60 * 1000);
+    const now = new Date();
+    await pool.query(
+      `UPDATE users
+       SET reset_token = $1,
+           reset_expires = $2,
+           reset_last_sent_at = $3,
+           reset_sent_count_24h = CASE
+             WHEN reset_sent_window_start IS NULL OR reset_sent_window_start <= NOW() - INTERVAL '24 hours' THEN 1
+             ELSE COALESCE(reset_sent_count_24h, 0) + 1
+           END,
+           reset_sent_window_start = CASE
+             WHEN reset_sent_window_start IS NULL OR reset_sent_window_start <= NOW() - INTERVAL '24 hours' THEN $3
+             ELSE reset_sent_window_start
+           END
+       WHERE id = $4`,
+      [token, expires, now, user.id]
+    );
+    await sendPasswordResetEmail(user.email, user.name, token);
+    res.json({
+      message: 'If that email exists, a password reset link has been sent.',
+      cooldownSeconds: 60,
+      remainingResends: Math.max(0, 3 - (Number(user.reset_sent_count_24h || 0) + 1)),
+      dailyLimitReached: Number(user.reset_sent_count_24h || 0) + 1 >= 3,
+      windowResetSeconds: 24 * 60 * 60,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/forgot-password/confirm', async (req, res) => {
+  const { token, new_password } = req.body;
+  if (!token || !new_password) return res.status(400).json({ error: 'token and new_password are required' });
+  if (new_password.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, email, name
+       FROM users
+       WHERE reset_token = $1
+         AND reset_expires > NOW()
+         AND is_active = TRUE`,
+      [token]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Invalid or expired password reset link.' });
+    const user = rows[0];
+    const hash = await bcrypt.hash(new_password, 12);
+    await pool.query(
+      `UPDATE users
+       SET password_hash = $1,
+           reset_token = NULL,
+           reset_expires = NULL,
+           reset_last_sent_at = NULL,
+           reset_sent_count_24h = 0,
+           reset_sent_window_start = NULL
+       WHERE id = $2`,
+      [hash, user.id]
+    );
+    sendPasswordChangedEmail(user.email, user.name).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });

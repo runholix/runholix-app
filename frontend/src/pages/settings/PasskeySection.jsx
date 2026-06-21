@@ -66,7 +66,7 @@ export default function PasskeySection() {
     };
 
     return (
-        <Section title="Passkeys" description="Use your device screen lock, fingerprint, or security key to sign in without a password.">
+        <Section title="Passkeys" description="Use your device face ID, fingerprint, or security key to sign in without a password.">
             {!supported && <Alert type="error" message="This browser does not support passkeys." />}
             {loading ? (
                 <div className="alert-info">Loading passkeys...</div>

@@ -43,6 +43,11 @@ async function startWithMigration() {
         is_active BOOLEAN NOT NULL DEFAULT FALSE,
         activation_token TEXT,
         activation_expires TIMESTAMPTZ,
+        reset_token TEXT,
+        reset_expires TIMESTAMPTZ,
+        reset_last_sent_at TIMESTAMPTZ,
+        reset_sent_count_24h INTEGER NOT NULL DEFAULT 0,
+        reset_sent_window_start TIMESTAMPTZ,
         pending_approval BOOLEAN NOT NULL DEFAULT FALSE,
         approval_token TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
@@ -54,6 +59,11 @@ async function startWithMigration() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_approval BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_expires TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_last_sent_at TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_sent_count_24h INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_sent_window_start TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS ical_enabled BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS ical_token TEXT;
       UPDATE users SET ical_enabled = FALSE WHERE ical_enabled IS NULL;

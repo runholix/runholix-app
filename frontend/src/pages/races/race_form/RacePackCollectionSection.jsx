@@ -27,10 +27,12 @@ export default function RacePackCollectionSection ({ setVal, set, makeOnClear, f
             </div>
 
             <div style={{ marginBottom:14 }}>
-                <Field label="Attachment (optional — PDF)">
+                <Field label="Attachment">
                     <PdfUploader filePath={form.rpc_attachment_path} fileName={form.rpc_attachment_name} userId={userId}
                                  onChange={(path, name) => { setVal('rpc_attachment_path', path); setVal('rpc_attachment_name', name); trackUpload('rpc_attachment', path); }}
-                                 onClear={makeOnClear('rpc_attachment', form.rpc_attachment_path, () => { setVal('rpc_attachment_path', ''); setVal('rpc_attachment_name', ''); })} />
+                                 onClear={makeOnClear('rpc_attachment', form.rpc_attachment_path, () => { setVal('rpc_attachment_path', ''); setVal('rpc_attachment_name', ''); })}
+                                 hint="Upload your e-race book here"
+                    />
                 </Field>
             </div>
 

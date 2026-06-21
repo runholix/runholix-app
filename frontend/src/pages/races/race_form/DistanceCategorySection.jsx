@@ -28,11 +28,11 @@ export default function DistanceCategorySection ({ isTrail, set, form }) {
             {/* Trail-only: Elevation gain + ITRA point */}
             {isTrail && (
                 <div className="grid-form-2" style={{ marginBottom:16 }}>
-                    <Field label="Elevation gain (m) *" hint="Total positive elevation for trail races">
+                    <Field label="Elevation gain (m)" hint="Total positive elevation for trail races">
                         <input type="number" value={form.elevation_gain_req_m} onChange={set('elevation_gain_req_m')}
-                               placeholder="2500" required={isTrail} />
+                               placeholder="2500" />
                     </Field>
-                    <Field label="ITRA point (optional)" hint="International Trail Running Association points">
+                    <Field label="ITRA point" hint="International Trail Running Association points">
                         <input type="text" value={form.itra_point} onChange={set('itra_point')} placeholder="e.g. 3 or 250" />
                     </Field>
                 </div>

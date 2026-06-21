@@ -50,6 +50,7 @@ export default function RaceFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [originalRaceDate, setOriginalRaceDate] = useState('');
 
   // Track files uploaded this session so we can delete them if user cancels
   const pendingUploads = useRef([]);
@@ -121,8 +122,10 @@ export default function RaceFormPage() {
     api.me().then(u => setUserId(u.id)).catch(() => {});
     if (!isEdit) return;
     api.getRace(id).then(race => {
+      const raceDate = race.race_date?.slice(0,10) || '';
+      setOriginalRaceDate(raceDate);
       setForm({
-        event_name: race.event_name || '', race_date: race.race_date?.slice(0,10) || '',
+        event_name: race.event_name || '', race_date: raceDate,
         registration_datetime: race.registration_datetime ? String(race.registration_datetime).replace(' ', 'T').slice(0,16) : '',
         flag_off_time: race.flag_off_time || '', cutoff_time: race.cutoff_time || '',
         route_file_path: race.route_file_path || '', route_file_name: race.route_file_name || '',
@@ -183,6 +186,17 @@ export default function RaceFormPage() {
   };
 
   const isTrail = form.race_type === 'trail';
+  const savedRaceDates = (() => {
+    try {
+      const dates = JSON.parse(localStorage.getItem('rt_race_date_list') || '[]');
+      return Array.isArray(dates) ? dates : [];
+    } catch {
+      return [];
+    }
+  })();
+  const raceDateExists = !!form.race_date
+    && savedRaceDates.includes(form.race_date)
+    && (!isEdit || form.race_date !== originalRaceDate);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -218,7 +232,7 @@ export default function RaceFormPage() {
         <div className="card">
 
           {/* ── EVENT INFO ─────────────────────────────────────────── */}
-          <EventInfoSection isTrail={isTrail} makeOnClear={makeOnClear} setVal={setVal} trackUpload={trackUpload} set={set} form={form} userId={userId} />
+          <EventInfoSection isTrail={isTrail} makeOnClear={makeOnClear} setVal={setVal} trackUpload={trackUpload} set={set} form={form} userId={userId} raceDateExists={raceDateExists} />
 
           {/* ── REGISTRATION ───────────────────────────────────────── */}
           <RegistrationSection isTrail={isTrail} makeOnClear={makeOnClear} set={set} setVal={setVal} form={form} userId={userId} />

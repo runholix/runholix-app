@@ -8,7 +8,7 @@ export default function RegistrationSection({ isTrail, makeOnClear, set, setVal,
 
             <div className="grid-form-3" style={{ marginBottom:14 }}>
                 <Field label="Bib number"><input value={form.bib_number} onChange={set('bib_number')} placeholder="1234" /></Field>
-                <Field label="Name on BIB (optional)"><input value={form.bib_name} onChange={set('bib_name')} placeholder="JOHN DOE" /></Field>
+                <Field label="Name on BIB"><input value={form.bib_name} onChange={set('bib_name')} placeholder="JOHN DOE" /></Field>
                 <Field label="Confirmation #"><input value={form.confirmation_number} onChange={set('confirmation_number')} /></Field>
             </div>
 
@@ -19,7 +19,7 @@ export default function RegistrationSection({ isTrail, makeOnClear, set, setVal,
                         {['IDR','USD','EUR','GBP','SGD','MYR','JPY','AUD'].map(c => <option key={c}>{c}</option>)}
                     </select>
                 </Field>
-                <Field label="Jersey size (optional)">
+                <Field label="Jersey size">
                     <select value={form.jersey_size} onChange={set('jersey_size')}>
                         <option value="">—</option>
                         {['XS','S','M','L','XL','XXL','XXXL'].map(s => <option key={s}>{s}</option>)}
@@ -34,7 +34,7 @@ export default function RegistrationSection({ isTrail, makeOnClear, set, setVal,
                 <Field label="Registered phone *">
                     <input type="tel" value={form.registered_phone} onChange={set('registered_phone')} placeholder="+62812345678" required />
                 </Field>
-                <Field label="Finish time target (optional)" hint="HH:MM:SS or MM:SS">
+                <Field label="Finish time target" hint="HH:MM:SS or MM:SS">
                     <input value={form.finish_time_target} onChange={set('finish_time_target')} placeholder="04:30:00"
                            pattern="^(\d{1,2}:\d{2}:\d{2}|\d{1,2}:\d{2})$"
                            title="HH:MM:SS (e.g. 04:30:00) or MM:SS (e.g. 28:30)" />
@@ -42,16 +42,18 @@ export default function RegistrationSection({ isTrail, makeOnClear, set, setVal,
             </div>
 
             <div style={{ marginBottom:14 }}>
-                <Field label="Attachment (optional — PDF)">
+                <Field label="Attachment">
                     <PdfUploader filePath={form.attachment_path} fileName={form.attachment_name} userId={userId}
                                  onChange={(path, name) => { setVal('attachment_path', path); setVal('attachment_name', name); trackUpload('attachment', path); }}
-                                 onClear={makeOnClear('attachment', form.attachment_path, () => { setVal('attachment_path', ''); setVal('attachment_name', ''); })} />
+                                 onClear={makeOnClear('attachment', form.attachment_path, () => { setVal('attachment_path', ''); setVal('attachment_name', ''); })}
+                                 hint="Upload your confirmation email or e-ticket here"
+                    />
                 </Field>
             </div>
 
             {/* Trail-only: Qualification */}
             {isTrail && (
-                <Field label="Qualification (optional)">
+                <Field label="Qualification">
               <textarea value={form.qualification} onChange={set('qualification')} rows={3}
                         placeholder="Required qualification races, ITRA points needed, proof of completion…"
                         style={{ resize:'vertical' }} />

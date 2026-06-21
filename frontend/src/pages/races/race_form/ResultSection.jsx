@@ -40,11 +40,11 @@ export default function ResultSection ({ setVal, set, makeOnClear, form, userId,
             </div>
             <div className="grid-form-2" style={{ marginBottom:16 }}>
                 <Field label="Certificate URL"><input type="url" value={form.certificate_url} onChange={set('certificate_url')} placeholder="https://…" /></Field>
-                <Field label="Strava URL (optional)">
+                <Field label="Strava URL">
                     <input type="url" value={form.strava_url} onChange={set('strava_url')} placeholder="https://www.strava.com/activities/…" />
                 </Field>
             </div>
-            <Field label="Result file (optional — .fit / .gpx / .kml)" hint="Metrics will be auto-filled from the file">
+            <Field label="Result file">
                 <ResultFileUploader
                     filePath={form.result_file_path}
                     fileName={form.result_file_name}
@@ -58,6 +58,7 @@ export default function ResultSection ({ setVal, set, makeOnClear, form, userId,
                         if (parsed.heartRateAvg  != null) setVal('heart_rate_avg', String(parsed.heartRateAvg));
                         if (parsed.heartRateMax  != null) setVal('heart_rate_max', String(parsed.heartRateMax));
                     }}
+                    hint="Upload your workout result file here"
                 />
             </Field>
         </>

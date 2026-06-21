@@ -65,12 +65,12 @@ export default function TrainingModal({ plan, races, defaultDate, onSave, onClos
                             <input type="date" value={form.plan_date} onChange={set('plan_date')} required />
                         </div>
                         <div className="form-group">
-                            <label className="form-label">Time (optional)</label>
+                            <label className="form-label">Time</label>
                             <input value={form.plan_time} onChange={set('plan_time')} placeholder="e.g. 05:30 or Morning" />
                         </div>
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Related race (optional)</label>
+                        <label className="form-label">Related race</label>
                         <input
                             value={search}
                             onChange={e => { setSearch(e.target.value); if (!e.target.value) { setForm(f => ({ ...f, race_id: '' })); setDirty(true); } }}
@@ -109,7 +109,7 @@ export default function TrainingModal({ plan, races, defaultDate, onSave, onClos
                         )}
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Notes (optional)</label>
+                        <label className="form-label">Notes</label>
                         <textarea value={form.notes} onChange={set('notes')} rows={3} placeholder="Details, targets, gear…" style={{ resize: 'vertical' }} />
                     </div>
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--color-border)' }}>

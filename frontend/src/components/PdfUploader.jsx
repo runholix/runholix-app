@@ -3,7 +3,7 @@ import { fmtMB, PDF_MAX_BYTES, sanitiseFileName, validatePdfFile } from "../lib/
 import { api } from "../lib/api.js";
 
 export default // ── PDF uploader ──────────────────────────────────────────────────────────
-function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
+function PdfUploader({ filePath, fileName, userId, onChange, onClear, hint=undefined }) {
     const inputRef = useRef();
     const [uploading, setUploading] = useState(false);
     const [err, setErr] = useState('');
@@ -85,7 +85,14 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear }) {
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading}>
                 <i className="ti ti-upload" /> {uploading ? 'Uploading…' : 'Upload PDF'}
             </button>
-            <div style={{ fontSize:11, color:'var(--color-text-hint)', marginTop:3 }}>Max {fmtMB(PDF_MAX_BYTES)}</div>
+            <div style={{ fontSize:11, color:'var(--color-text-hint)', marginTop:3 }}>
+                {hint && hint.length > 0 && (
+                    <>
+                        {hint}<br/>
+                    </>
+                )}
+                Max {fmtMB(PDF_MAX_BYTES)}
+            </div>
             {err && <div style={{ color:'var(--color-danger)', fontSize:12, marginTop:4 }}>{err}</div>}
         </div>
     );

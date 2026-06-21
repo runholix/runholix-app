@@ -1,6 +1,13 @@
 const BASE = import.meta.env.VITE_API_URL || '/api';
+const RACE_DATE_LIST_KEY = 'rt_race_date_list';
 
 function getToken() { return localStorage.getItem('rt_token'); }
+
+function storeRaceDateList(data) {
+  const races = Array.isArray(data) ? data : [];
+  const dates = [...new Set(races.map(r => r.race_date?.slice(0, 10)).filter(Boolean))];
+  localStorage.setItem(RACE_DATE_LIST_KEY, JSON.stringify(dates));
+}
 
 async function request(path, options = {}) {
   const token = getToken();
@@ -72,9 +79,11 @@ export const api = {
   toggleIcal:     (body) => request('/auth/ical', { method: 'PUT', body: JSON.stringify(body) }),
 
   // ── Races ─────────────────────────────────────────────────────────────
-  getRaces:   (params = {}) => {
+  getRaces:   async (params = {}) => {
     const q = new URLSearchParams(params).toString();
-    return request(`/races${q ? '?' + q : ''}`);
+    const data = await request(`/races${q ? '?' + q : ''}`);
+    storeRaceDateList(data);
+    return data;
   },
   getStats:   ()         => request('/races/stats'),
   getRace:    (id)       => request(`/races/${id}`),

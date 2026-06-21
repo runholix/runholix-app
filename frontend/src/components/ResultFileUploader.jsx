@@ -3,7 +3,7 @@ import { fmtMB, parseActivityFile, routeLimitBytes, sanitiseFileName, validateRo
 import { api } from "../lib/api.js";
 
 // ── Result file uploader — validate + parse + upload in parallel ─────────
-export default function ResultFileUploader({ filePath, fileName, userId, distanceKm, onChange, onClear, onParsed }) {
+export default function ResultFileUploader({ filePath, fileName, userId, distanceKm, onChange, onClear, onParsed, hint=undefined }) {
     const inputRef = useRef();
     const [uploading, setUploading] = useState(false);
     const [parseMsg, setParseMsg] = useState('');
@@ -112,7 +112,14 @@ export default function ResultFileUploader({ filePath, fileName, userId, distanc
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current.click()} disabled={uploading}>
                 <i className="ti ti-upload" /> {uploading ? 'Uploading & parsing…' : 'Upload .fit / .gpx / .kml'}
             </button>
-            <div style={{ fontSize:11, color:'var(--color-text-hint)', marginTop:3 }}>Max {fmtMB(limit)} · Metrics auto-filled from file</div>
+            <div style={{ fontSize:11, color:'var(--color-text-hint)', marginTop:3 }}>
+                {hint && hint.length > 0 && (
+                    <>
+                        {hint}<br/>
+                    </>
+                )}
+                Max {fmtMB(limit)} · Metrics auto-filled from file
+            </div>
             {err && <div style={{ color:'var(--color-danger)', fontSize:12, marginTop:4 }}>{err}</div>}
         </div>
     );

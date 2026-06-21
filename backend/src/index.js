@@ -51,6 +51,11 @@ async function startWithMigration() {
         reset_sent_window_start TIMESTAMPTZ,
         pending_approval BOOLEAN NOT NULL DEFAULT FALSE,
         approval_token TEXT,
+        ical_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+        ical_token TEXT,
+        pending_email TEXT,
+        email_change_token TEXT,
+        email_change_expires TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 

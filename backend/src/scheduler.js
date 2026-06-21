@@ -35,10 +35,15 @@ function formatZonedDate(date, timeZone) {
 }
 
 function addDays(dateStr, days) {
-  const [year, month, day] = dateStr.split('-').map(Number);
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return null;
+  const [year, month, day] = parts;
   const d = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(d.getTime())) return null;
   d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+  const iso = d.toISOString();
+  return Number.isNaN(Date.parse(iso)) ? null : iso.slice(0, 10);
 }
 
 function timezoneOffsetMinutes(date, timeZone) {
@@ -55,12 +60,18 @@ function timezoneOffsetMinutes(date, timeZone) {
 
 function localDateTimeToUtcMillis(dateStr, timeStr, timeZone) {
   if (!dateStr || !timeStr) return null;
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const [hour, minute, second = 0] = timeStr.split(':').map(Number);
+  const dateParts = dateStr.split('-').map(Number);
+  const timeParts = timeStr.split(':').map(Number);
+  if (dateParts.length !== 3 || dateParts.some(n => !Number.isFinite(n))) return null;
+  if (timeParts.length < 2 || timeParts.some(n => !Number.isFinite(n))) return null;
+  const [year, month, day] = dateParts;
+  const [hour, minute, second = 0] = timeParts;
   let utc = Date.UTC(year, month - 1, day, hour, minute, second);
+  if (!Number.isFinite(utc)) return null;
   for (let i = 0; i < 3; i++) {
     const offset = timezoneOffsetMinutes(new Date(utc), timeZone);
     utc = Date.UTC(year, month - 1, day, hour, minute, second) - offset * 60 * 1000;
+    if (!Number.isFinite(utc)) return null;
   }
   return utc;
 }
@@ -70,7 +81,7 @@ async function runReminders() {
 
   const now = new Date();
   const nowUtc = now.toISOString();
-  console.log(`[scheduler] Running reminders — ${nowUtc}`);
+  console.log(`[scheduler] Running reminders - ${nowUtc}`);
 
   let totals = { race: 0, rpc: 0, rpcEnd: 0, fillRpc7: 0, fillRpc3: 0, fillResults: 0, regD1: 0, regT1h: 0, regD3: 0 };
 
@@ -95,11 +106,15 @@ async function runReminders() {
       const localToday = formatZonedDate(now, tz);
       const regDate = String(row.registration_datetime).slice(0, 10);
       const regTime = String(row.registration_datetime).slice(11, 19);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(regDate)) continue;
+
       const localRegUtc = localDateTimeToUtcMillis(regDate, regTime, tz);
       const regD3 = addDays(regDate, 3);
+      const regD1 = addDays(regDate, -1);
+      if (!regD3 || !regD1) continue;
 
       // ── 1. D-1: Race registration starts tomorrow ──────────────────────
-      if (localToday === addDays(regDate, -1) && !row.registration_reminder_d1_sent_at) {
+      if (localToday === regD1 && !row.registration_reminder_d1_sent_at) {
         await sendRegistrationReminder(row.user_email, row.user_name, row, 'd1').catch(() => {});
         await pool.query('UPDATE races SET registration_reminder_d1_sent_at = NOW() WHERE id = $1', [row.id]);
         totals.regD1 += 1;
@@ -129,6 +144,7 @@ async function runReminders() {
     const in3days = addDays(today, 3);
     const in7days = addDays(today, 7);
     const minus3 = addDays(today, -3);
+    if (!tomorrow || !in3days || !in7days || !minus3) throw new Error('Invalid scheduler date window');
 
     // ── 4. D-1: Race day tomorrow ─────────────────────────────────────────
     const { rows: raceRows } = await pool.query(`
@@ -186,7 +202,7 @@ async function runReminders() {
       JOIN users u ON u.id = r.user_id
       WHERE r.race_date = $1
         AND r.status IN ('registered', 'upcoming')
-        AND (r.rpc_date_start IS NULL OR r.rpc_date_start = '')
+        AND NULLIF(r.rpc_date_start::text, '') IS NULL
         AND r.fill_rpc7_reminder_sent_at IS NULL
         AND u.is_active = true
     `, [in7days]);
@@ -203,7 +219,7 @@ async function runReminders() {
       JOIN users u ON u.id = r.user_id
       WHERE r.race_date = $1
         AND r.status IN ('registered', 'upcoming')
-        AND (r.rpc_date_start IS NULL OR r.rpc_date_start = '')
+        AND NULLIF(r.rpc_date_start::text, '') IS NULL
         AND r.fill_rpc3_reminder_sent_at IS NULL
         AND u.is_active = true
     `, [in3days]);
@@ -230,7 +246,7 @@ async function runReminders() {
     totals.fillResults = noResultRows.length;
 
     console.log(
-      `[scheduler] Done — reg-d1:${totals.regD1} reg-t1h:${totals.regT1h} reg-d3:${totals.regD3} ` +
+      `[scheduler] Done - reg-d1:${totals.regD1} reg-t1h:${totals.regT1h} reg-d3:${totals.regD3} ` +
       `race:${totals.race} rpc:${totals.rpc} rpc-end:${totals.rpcEnd} fill-rpc-7:${totals.fillRpc7} ` +
       `fill-rpc-3:${totals.fillRpc3} fill-results:${totals.fillResults}`
     );
@@ -241,9 +257,9 @@ async function runReminders() {
 
 export function startScheduler() {
   if (!emailEnabled) {
-    console.log('[scheduler] Email disabled — scheduler not started');
+    console.log('[scheduler] Email disabled - scheduler not started');
     return;
   }
   cron.schedule('* * * * *', runReminders);
-  console.log('[scheduler] Started — minute reminders');
+  console.log('[scheduler] Started - minute reminders');
 }

@@ -9,26 +9,35 @@ function str(v) { return (v === '' || v === undefined) ? null : v; }
 
 // ── LIST (optionally filter by year-month) ────────────────────────────────
 router.get('/', async (req, res) => {
-  const { year, month } = req.query;
+  const { year } = req.query;
   let query = `
-    SELECT t.*, t.plan_date::text AS plan_date, r.event_name AS race_name, r.race_date::text AS race_date
+    SELECT
+      t.id,
+      t.name,
+      t.plan_date::text AS plan_date,
+      t.plan_time,
+      t.race_id,
+      t.notes,
+      r.event_name AS race_name,
+      r.race_date::text AS race_date
     FROM training_plans t
     LEFT JOIN races r ON r.id = t.race_id AND r.user_id = t.user_id
-    WHERE t.user_id = $1`;
+    WHERE t.user_id = $1
+  `;
   const params = [req.userId];
   let i = 2;
-  if (year && month) {
-    query += ` AND EXTRACT(YEAR FROM t.plan_date)=$${i++} AND EXTRACT(MONTH FROM t.plan_date)=$${i++}`;
-    params.push(year, month);
-  } else if (year) {
-    query += ` AND EXTRACT(YEAR FROM t.plan_date)=$${i++}`;
+  if (year) {
+    query += ` AND EXTRACT(YEAR FROM t.plan_date) = $${i++}`;
     params.push(year);
   }
   query += ' ORDER BY t.plan_date, t.plan_time';
   try {
     const { rows } = await pool.query(query, params);
     res.json(rows);
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // ── GET ONE ───────────────────────────────────────────────────────────────
@@ -41,7 +50,9 @@ router.get('/:id', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: 'Server error' }); }
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // ── CREATE ────────────────────────────────────────────────────────────────
@@ -55,10 +66,12 @@ router.post('/', async (req, res) => {
       [req.userId, name, plan_date, str(plan_time), str(race_id) || null, str(notes)]
     );
     res.status(201).json(rows[0]);
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-// ── UPDATE ────────────────────────────────────────────────────────────────
 router.put('/:id', async (req, res) => {
   const { name, plan_date, plan_time, race_id, notes } = req.body;
   if (!name || !plan_date) return res.status(400).json({ error: 'name and plan_date required' });
@@ -70,10 +83,12 @@ router.put('/:id', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-// ── DELETE ────────────────────────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
   try {
     const { rowCount } = await pool.query(
@@ -82,7 +97,9 @@ router.delete('/:id', async (req, res) => {
     );
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: 'Server error' }); }
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 export default router;

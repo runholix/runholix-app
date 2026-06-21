@@ -76,7 +76,7 @@ npm run dev   # Vite dev server at http://localhost:5173
 | POST | `/api/auth/register` | Create account |
 | POST | `/api/auth/login` | Login, returns JWT |
 | GET | `/api/auth/me` | Current user info |
-| GET | `/api/races` | List races (filter: status, year, search) |
+| GET | `/api/races` | List races (filter: status, year, search, sort, order, page, pageSize) |
 | GET | `/api/races/stats` | Aggregate stats & PBs |
 | GET | `/api/races/:id` | Single race |
 | POST | `/api/races` | Create race |

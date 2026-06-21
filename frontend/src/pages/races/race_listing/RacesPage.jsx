@@ -5,7 +5,6 @@ import Pagination from "./Pagination.jsx";
 import MobileRaceCard from "./MobileRaceCard.jsx";
 import Table from "./Table.jsx";
 
-// ── Page size with cross-breakpoint page recalculation ────────────────────
 function usePageSize(page, setPage) {
   const [size, setSize] = useState(() => window.innerWidth < 768 ? 5 : 10);
   const prevSizeRef = useRef(size);
@@ -18,10 +17,8 @@ function usePageSize(page, setPage) {
       setPage(prevPage => {
         let newPage;
         if (newSize === 10) {
-          // mobile → desktop: formula (page + page % 2) / 2
           newPage = Math.floor((prevPage + (prevPage % 2)) / 2);
         } else {
-          // desktop → mobile: formula (page * 2) - 1
           newPage = prevPage * 2 - 1;
         }
         return Math.max(1, newPage);
@@ -38,7 +35,6 @@ function usePageSize(page, setPage) {
   return size;
 }
 
-// ── Session state persistence ─────────────────────────────────────────────
 const SESSION_KEY = 'races_list_state';
 
 function saveListState(state) {
@@ -58,72 +54,84 @@ export const STATUS_META = {
 
 export default function RacesPage() {
   const location = useLocation();
+  const restoredState = location.state?.restorePage ? location.state : loadListState();
 
-  // ── Restore state from sessionStorage (back navigation) or location.state ─
-  const restoredState = (() => {
-    // location.state is set when navigating back from detail page
-    if (location.state?.restorePage) return location.state;
-    return loadListState();
-  })();
-
-  const [races, setRaces]   = useState([]);
+  const [races, setRaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(restoredState?.filters || { status: '', year: '', search: '' });
-  const [page, setPage]     = useState(restoredState?.page || 1);
+  const [searchInput, setSearchInput] = useState(restoredState?.filters?.search || '');
+  const [page, setPage] = useState(restoredState?.page || 1);
   const [error, setError] = useState('');
+  const [total, setTotal] = useState(0);
+  const [years, setYears] = useState([]);
 
   const pageSize = usePageSize(page, setPage);
+  const prevFiltersRef = useRef(filters);
+  const firstLoadRef = useRef(true);
 
-  // ── Persist list state to sessionStorage on every change ─────────────────
   useEffect(() => {
     saveListState({ filters, page });
   }, [filters, page]);
 
-  const load = async () => {
-    setLoading(true);
-    const params = { sort: 'race_date', order: 'desc' };
-    if (filters.status) params.status = filters.status;
-    if (filters.year)   params.year   = filters.year;
-    if (filters.search) params.search = filters.search;
-    try {
-      const data = await api.getRaces(params);
-      setRaces(data);
-      setError('');
-    } catch (err) {
-      console.error(err);
-      setError(`Failed to load races list: ${err?.status || ''} ${err.message}`)
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Reset to page 1 whenever filters change (but not on initial mount)
-  const isFirstMount = useRef(true);
   useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
+    setSearchInput(filters.search);
+  }, [filters.search]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        setFilters(f => ({ ...f, search: searchInput }));
+      }
+    }, 500);
+
+    return () => clearTimeout(handle);
+  }, [searchInput]);
+
+  useEffect(() => {
+      const load = async () => {
+        setLoading(true);
+        const params = { sort: 'race_date', order: 'desc', page, pageSize };
+        if (filters.status) params.status = filters.status;
+        if (filters.year) params.year = filters.year;
+        if (filters.search) params.search = filters.search;
+
+      try {
+        const data = await api.getRaces(params);
+        setRaces(data.items || []);
+        setTotal(data.total || 0);
+        setYears(Array.isArray(data.years) ? data.years : []);
+        setError('');
+      } catch (err) {
+        console.error(err);
+        setError(`Failed to load races list: ${err?.status || ''} ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const filtersChanged =
+      prevFiltersRef.current.status !== filters.status ||
+      prevFiltersRef.current.year !== filters.year ||
+      prevFiltersRef.current.search !== filters.search;
+
+    if (firstLoadRef.current) {
+      firstLoadRef.current = false;
+      prevFiltersRef.current = filters;
       load();
       return;
     }
-    setPage(1);
+
+    if (filtersChanged && page !== 1) {
+      prevFiltersRef.current = filters;
+      setPage(1);
+      return;
+    }
+
+    prevFiltersRef.current = filters;
     load();
-  }, [filters]);
+  }, [filters, page, pageSize]);
 
-  // ── After races load, if restoring by raceId, find its page ──────────────
-  useEffect(() => {
-    if (!restoredState?.scrollToRaceId || !races.length) return;
-    const idx = races.findIndex(r => r.id === restoredState.scrollToRaceId);
-    if (idx === -1) return;
-    const targetPage = Math.floor(idx / pageSize) + 1;
-    setPage(targetPage);
-  }, [races]);
-
-  const years = [...new Set(races.map(r => r.race_date?.slice(0, 4)).filter(Boolean))].sort().reverse();
-
-  const totalPages = Math.ceil(races.length / pageSize);
-  const paged = races.slice((page - 1) * pageSize, page * pageSize);
-
-  // State passed to each race link so detail page can pass it back
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const listState = { filters, page, scrollToRaceId: null };
 
   return (
@@ -131,21 +139,20 @@ export default function RacesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">My Races</h1>
-          <p className="page-subtitle">{races.length} total</p>
+          <p className="page-subtitle">{total} total</p>
         </div>
         <Link to="/races/new" className="btn btn-primary">
           <i className="ti ti-plus" /> Add race
         </Link>
       </div>
 
-      {/* Filters */}
       <div className="filters-bar">
         <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 0 }}>
           <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-hint)', fontSize: 15, pointerEvents: 'none' }} />
           <input
-            placeholder="Search races…"
-            value={filters.search}
-            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+            placeholder="Search races..."
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
             style={{ paddingLeft: 32 }}
           />
         </div>
@@ -162,7 +169,7 @@ export default function RacesPage() {
       {loading ? (
         <div className="alert-info">Loading...</div>
       ) : error ? (
-          <div className="alert-error">{error}</div>
+        <div className="alert-error">{error}</div>
       ) : races.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 48 }}>
           <i className="ti ti-trophy" style={{ fontSize: 40, color: 'var(--color-text-hint)', display: 'block', marginBottom: 12 }} />
@@ -174,18 +181,16 @@ export default function RacesPage() {
         </div>
       ) : (
         <>
-          {/* Mobile card list */}
           <div className="mobile-only">
-            {paged.map(r => <MobileRaceCard key={r.id} r={r} listState={{ ...listState, scrollToRaceId: r.id }} />)}
-            <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={pageSize} onChange={setPage} />
+            {races.map(r => <MobileRaceCard key={r.id} r={r} listState={{ ...listState, scrollToRaceId: r.id }} />)}
+            <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize} onChange={setPage} />
           </div>
 
-          {/* Table */}
           <div className="tablet-up">
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <Table paged={paged} listState={listState} />
+              <Table paged={races} listState={listState} />
             </div>
-            <Pagination page={page} totalPages={totalPages} total={races.length} pageSize={pageSize} onChange={setPage} />
+            <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize} onChange={setPage} />
           </div>
         </>
       )}

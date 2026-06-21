@@ -88,10 +88,12 @@ export const api = {
   toggleIcal:     (body) => request('/auth/ical', { method: 'PUT', body: JSON.stringify(body) }),
 
   // ── Races ─────────────────────────────────────────────────────────────
+  getDashboard: () => request('/races/dashboard'),
+  getRaceCalendar: (year) => request(`/races/calendar?year=${encodeURIComponent(year)}`),
   getRaces:   async (params = {}) => {
     const q = new URLSearchParams(params).toString();
     const data = await request(`/races${q ? '?' + q : ''}`);
-    storeRaceDateList(data);
+    storeRaceDateList(data.items);
     return data;
   },
   getStats:   ()         => request('/races/stats'),
@@ -154,3 +156,4 @@ export const api = {
   deleteAvatar:  ()     => request('/upload/avatar', { method: 'DELETE' }),
   avatarUrl:     (userId) => `${BASE}/upload/avatar/${encodeURIComponent(userId)}`,
 };
+

@@ -44,24 +44,123 @@ function mapRace(row) {
   };
 }
 
+router.get('/calendar', async (req, res) => {
+  const year = Number(req.query.year);
+  if (!year) return res.status(400).json({ error: 'year required' });
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          r.id,
+          r.event_name,
+          r.race_date::text AS race_date,
+          r.status,
+          r.flag_off_time,
+          r.registration_datetime::text AS registration_datetime,
+          r.rpc_date_start::text AS rpc_date_start,
+          r.rpc_date_end::text AS rpc_date_end,
+          r.rpc_time,
+          r.rpc_location,
+          r.rpc_status
+        FROM races r
+        WHERE r.user_id = $1
+          AND EXTRACT(YEAR FROM r.race_date) = $2
+        ORDER BY r.race_date, r.created_at
+      `,
+      [req.userId, year]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+router.get('/dashboard', async (req, res) => {
+  try {
+    const baseSql = `
+      FROM races r
+      WHERE r.user_id = $1
+    `;
+
+    const [upcomingRows, recentRows, yearlyRows] = await Promise.all([
+      pool.query(
+        `
+          SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime,
+                 r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end
+          ${baseSql}
+          AND r.status IN ('registered','upcoming')
+          ORDER BY r.race_date ASC, r.created_at DESC
+          LIMIT 5
+        `,
+        [req.userId]
+      ),
+      pool.query(
+        `
+          SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime,
+                 r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end
+          ${baseSql}
+          AND r.status = 'completed'
+          ORDER BY r.race_date DESC, r.created_at DESC
+          LIMIT 5
+        `,
+        [req.userId]
+      ),
+      pool.query(
+        `
+          SELECT EXTRACT(YEAR FROM r.race_date)::int AS year, COUNT(*)::int AS count
+          ${baseSql}
+          GROUP BY 1
+          ORDER BY year DESC
+        `,
+        [req.userId]
+      ),
+    ]);
+
+    res.json({
+      upcoming: upcomingRows.rows.map(mapRace),
+      recent: recentRows.rows.map(mapRace),
+      yearlyCounts: yearlyRows.rows.map(r => ({ year: String(r.year), count: r.count })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── LIST ──────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
-  const { status, year, search, sort = 'race_date', order = 'desc' } = req.query;
-  let query = 'SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime, r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end FROM races r WHERE r.user_id = $1';
+  const { status, year, search, sort = 'race_date', order = 'desc', page = '1', pageSize = '10' } = req.query;
+  const limit = Math.max(1, Math.min(100, Number(pageSize) || 10));
+  const currentPage = Math.max(1, Number(page) || 1);
+  const offset = (currentPage - 1) * limit;
+  let where = ' FROM races r WHERE r.user_id = $1';
   const params = [req.userId];
   let i = 2;
-  if (status) { query += ` AND r.status = $${i++}`; params.push(status); }
-  if (year)   { query += ` AND EXTRACT(YEAR FROM r.race_date) = $${i++}`; params.push(year); }
+  if (status) { where += ` AND r.status = $${i++}`; params.push(status); }
+  if (year)   { where += ` AND EXTRACT(YEAR FROM r.race_date) = $${i++}`; params.push(year); }
   if (search) {
-    query += ` AND (r.event_name ILIKE $${i} OR r.location ILIKE $${i} OR r.city ILIKE $${i})`;
+    where += ` AND (r.event_name ILIKE $${i} OR r.location ILIKE $${i} OR r.city ILIKE $${i})`;
     params.push(`%${search}%`); i++;
   }
   const safeSort  = ['r.race_date','r.event_name','r.distance_km','r.finish_time_seconds','r.created_at'].includes(sort) ? sort : 'r.race_date';
   const safeOrder = order === 'asc' ? 'ASC' : 'DESC';
-  query += ` ORDER BY ${safeSort} ${safeOrder}`;
+  const countSql = `SELECT COUNT(*)::int AS total${where}`;
+  const dataSql = `SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime, r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end${where} ORDER BY ${safeSort} ${safeOrder} LIMIT $${i} OFFSET $${i + 1}`;
+  const yearsSql = `SELECT DISTINCT EXTRACT(YEAR FROM r.race_date)::int AS year${where} ORDER BY year DESC`;
   try {
-    const { rows } = await pool.query(query, params);
-    res.json(rows.map(mapRace));
+    const { rows: countRows } = await pool.query(countSql, params);
+    const { rows } = await pool.query(dataSql, [...params, limit, offset]);
+    const { rows: yearRows } = await pool.query(yearsSql, params);
+    const total = countRows[0]?.total || 0;
+    res.json({
+      items: rows.map(mapRace),
+      total,
+      page: currentPage,
+      pageSize: limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      years: yearRows.map(r => String(r.year)).filter(Boolean),
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -385,3 +484,6 @@ router.delete('/:id', async (req, res) => {
 });
 
 export default router;
+
+
+

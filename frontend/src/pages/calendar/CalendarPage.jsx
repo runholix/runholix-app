@@ -130,15 +130,19 @@ export default function CalendarPage() {
   const [popup, setPopup] = useState(null);
   const [error, setError] = useState('');
   const [errorDelete, setErrorDelete] = useState('');
+  const viewedYear = date.getFullYear();
 
   const w = useWindowWidth();
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [r, t] = await Promise.all([api.getRaces(), api.getTraining()]);
-      setRaces(r);
-      setTraining(t);
+      const [r, t] = await Promise.all([
+        api.getRaceCalendar(viewedYear),
+        api.getTraining({ year: viewedYear }),
+      ]);
+      setRaces(r || []);
+      setTraining(t || []);
     } catch (err) {
       console.error(err);
       setError(`Failed to load calendar data: ${err?.status || ''} ${err.message}`)
@@ -147,7 +151,7 @@ export default function CalendarPage() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [viewedYear]);
 
   const events = buildEvents(races, training);
 

@@ -73,6 +73,15 @@ async function startWithMigration() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_token TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS registration_reminder_d1_sent_at TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS registration_reminder_t1h_sent_at TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS registration_reminder_d3_sent_at TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS race_day_reminder_sent_at TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_reminder_sent_at TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS rpc_end_reminder_sent_at TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS fill_rpc7_reminder_sent_at TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS fill_rpc3_reminder_sent_at TIMESTAMPTZ;
+      ALTER TABLE races ADD COLUMN IF NOT EXISTS fill_results_reminder_sent_at TIMESTAMPTZ;
       -- Existing users (pre-email feature) are grandfathered in as active
       UPDATE users SET is_active = TRUE WHERE is_active = FALSE AND activation_token IS NULL;
 

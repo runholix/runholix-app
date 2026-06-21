@@ -41,6 +41,16 @@ CREATE TABLE IF NOT EXISTS races (
   registration_datetime TIMESTAMP,
   bib_number TEXT,
   confirmation_number TEXT,
+  timezone TEXT,
+  registration_reminder_d1_sent_at TIMESTAMPTZ,
+  registration_reminder_t1h_sent_at TIMESTAMPTZ,
+  registration_reminder_d3_sent_at TIMESTAMPTZ,
+  race_day_reminder_sent_at TIMESTAMPTZ,
+  rpc_reminder_sent_at TIMESTAMPTZ,
+  rpc_end_reminder_sent_at TIMESTAMPTZ,
+  fill_rpc7_reminder_sent_at TIMESTAMPTZ,
+  fill_rpc3_reminder_sent_at TIMESTAMPTZ,
+  fill_results_reminder_sent_at TIMESTAMPTZ,
 
   -- Distance
   distance_km NUMERIC(10,3),

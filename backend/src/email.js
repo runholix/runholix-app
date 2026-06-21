@@ -102,6 +102,72 @@ export async function sendRaceReminder(to, name, race) {
   `));
 }
 
+export async function sendRegistrationReminder(to, name, race, kind = 'd1') {
+  const link = `${APP_URL}/races/${race.id}`;
+  const isHour = kind === 't1h';
+  const subject = isHour
+    ? `1 hour to go: register for ${race.event_name}`
+    : `Tomorrow: register for ${race.event_name}`;
+  const heading = isHour
+    ? `1 hour to go: ${race.event_name}`
+    : `Tomorrow: ${race.event_name}`;
+  const bodyLead = isHour
+    ? `Your race registration starts in about 1 hour.`
+    : `Your race registration starts tomorrow.`;
+
+  await send(to, subject, wrap(heading, `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>${bodyLead}</p>
+    <div class="info">
+      <p><strong>${race.event_name}</strong> <span class="badge badge-race">Race</span></p>
+      <p><strong>Race date:</strong> ${fmtDate(race.race_date)}</p>
+      ${race.flag_off_time ? `<p><strong>Flag off:</strong> ${race.flag_off_time}</p>` : ''}
+      ${race.cutoff_time ? `<p><strong>Cut off:</strong> ${race.cutoff_time}</p>` : ''}
+      ${race.city ? `<p><strong>Location:</strong> ${race.city}${race.country ? ', ' + race.country : ''}</p>` : ''}
+      ${race.timezone ? `<p><strong>Timezone:</strong> ${race.timezone}</p>` : ''}
+    </div>
+    <a href="${link}" class="btn">View race details</a>
+    <p style="font-size:12px;color:#9b9890">Open the race details page to review your event and complete registration.</p>
+  `));
+}
+
+export async function sendRegistrationFollowup(to, name, race) {
+  const link = `${APP_URL}/races/${race.id}`;
+  await send(to, `Update your race details: ${race.event_name}`, wrap(`Update your race details`, `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>It has been a few days since you registered for this race. Please review and update the race details if anything has changed.</p>
+    <div class="info">
+      <p><strong>${race.event_name}</strong> <span class="badge badge-race">Race</span></p>
+      <p><strong>Race date:</strong> ${fmtDate(race.race_date)}</p>
+      ${race.flag_off_time ? `<p><strong>Flag off:</strong> ${race.flag_off_time}</p>` : ''}
+      ${race.cutoff_time ? `<p><strong>Cut off:</strong> ${race.cutoff_time}</p>` : ''}
+      ${race.city ? `<p><strong>Location:</strong> ${race.city}${race.country ? ', ' + race.country : ''}</p>` : ''}
+      ${race.timezone ? `<p><strong>Timezone:</strong> ${race.timezone}</p>` : ''}
+    </div>
+    <a href="${link}" class="btn">View race details</a>
+    <p style="font-size:12px;color:#9b9890">Open the race details page to update any missing or changed information.</p>
+  `));
+}
+
+export async function sendRpcEndReminder(to, name, race) {
+  const link = `${APP_URL}/races/${race.id}`;
+  await send(to, `Race pack collection ends today: ${race.event_name}`, wrap('Race pack collection ends today', `
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>Race pack collection for <strong>${race.event_name}</strong> ends today and your status still shows as not collected.</p>
+    <div class="info">
+      <p><strong>${race.event_name}</strong> <span class="badge badge-rpc">Race Pack</span></p>
+      <p><strong>Race date:</strong> ${fmtDate(race.race_date)}</p>
+      ${race.rpc_date_start ? `<p><strong>Collection start:</strong> ${fmtDate(race.rpc_date_start)}</p>` : ''}
+      ${race.rpc_date_end ? `<p><strong>Collection end:</strong> ${fmtDate(race.rpc_date_end)}</p>` : ''}
+      ${race.rpc_time ? `<p><strong>Hours:</strong> ${race.rpc_time}</p>` : ''}
+      ${race.rpc_location ? `<p><strong>Location:</strong> ${race.rpc_location}</p>` : ''}
+      ${race.timezone ? `<p><strong>Timezone:</strong> ${race.timezone}</p>` : ''}
+    </div>
+    <a href="${link}" class="btn">View race details</a>
+    <p style="font-size:12px;color:#9b9890">Open the race details page to complete collection before it closes.</p>
+  `));
+}
+
 export async function sendRpcReminder(to, name, race) {
   const link = `${APP_URL}/races/${race.id}`;
   await send(to, `📦 Tomorrow: Race pack collection — ${race.event_name}`, wrap(`Race pack collection starts tomorrow`, `

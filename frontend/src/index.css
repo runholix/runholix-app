@@ -127,6 +127,18 @@ select option {
   font-weight: 500; border: 1px solid transparent;
   transition: all 0.15s; white-space: nowrap;
 }
+.btn:disabled {
+  background: var(--color-text-hint);
+  color: var(--color-text-muted);
+  border-color: var(--color-border-subtle);
+  cursor: not-allowed;
+}
+.btn:disabled:hover {
+  background: var(--color-text-hint);
+  color: var(--color-text-muted);
+  border-color: var(--color-border-subtle);
+  opacity: 0.75;
+}
 .btn-primary {
   background: var(--color-primary); color: #fff;
   border-color: var(--color-primary);
@@ -262,7 +274,7 @@ tbody tr:hover td { background: var(--color-bg); }
 
 /* ── Tablet (≥ 768px) ── */
 @media (min-width: 768px) {
-  .page          { padding: 28px 28px; }
+  .page          { padding: 28px 28px; margin: 0 auto; }
   .grid-stats    { grid-template-columns: repeat(2, 1fr); }
   .grid-halves   { grid-template-columns: 1fr 1fr; }
   .grid-form-2   { grid-template-columns: 1fr 1fr; }

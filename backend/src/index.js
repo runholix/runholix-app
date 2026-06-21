@@ -40,6 +40,7 @@ async function startWithMigration() {
         password_hash TEXT NOT NULL,
         name TEXT NOT NULL,
         avatar_path TEXT,
+        timezone TEXT NOT NULL DEFAULT 'UTC',
         is_active BOOLEAN NOT NULL DEFAULT FALSE,
         activation_token TEXT,
         activation_expires TIMESTAMPTZ,
@@ -55,6 +56,7 @@ async function startWithMigration() {
 
       -- Idempotent: add new columns to existing installs
       ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_path TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_approval BOOLEAN NOT NULL DEFAULT FALSE;

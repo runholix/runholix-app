@@ -20,8 +20,8 @@ export default function Pagination({ page, totalPages, total, pageSize, onChange
                 Showing {from}–{to} of {total} races
             </div>
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                <button onClick={() => onChange(page - 1)} disabled={page === 1} className="btn btn-ghost btn-sm" style={{ padding: '5px 8px' }}>
-                    <i className="ti ti-chevron-left" />
+                <button onClick={() => onChange(page - 1)} className="btn btn-ghost btn-sm" style={{ padding: '5px 8px' }}>
+                    {page !== 1 && <i className="ti ti-chevron-left" />}
                 </button>
                 {withGaps.map((p, i) =>
                     p === '…' ? (
@@ -36,8 +36,8 @@ export default function Pagination({ page, totalPages, total, pageSize, onChange
                         }}>{p}</button>
                     )
                 )}
-                <button onClick={() => onChange(page + 1)} disabled={page === totalPages} className="btn btn-ghost btn-sm" style={{ padding: '5px 8px' }}>
-                    <i className="ti ti-chevron-right" />
+                <button onClick={() => onChange(page + 1)} className="btn btn-ghost btn-sm" style={{ padding: '5px 8px' }}>
+                    {page !== totalPages && <i className="ti ti-chevron-right" />}
                 </button>
             </div>
         </div>

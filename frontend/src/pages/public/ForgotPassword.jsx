@@ -124,7 +124,7 @@ export default function ForgotPassword() {
               <label className="form-label">Email *</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
             </div>
-            <button type="submit" className={`btn ${(loading || resendBlocked) ? 'btn-ghost' : 'btn-primary'}`} disabled={loading || resendBlocked} style={{ justifyContent: 'center' }}>
+            <button type="submit" className="btn btn-primary" disabled={loading || resendBlocked} style={{ justifyContent: 'center' }}>
               {loading ? 'Sending…' : sendButtonLabel}
             </button>
           </form>

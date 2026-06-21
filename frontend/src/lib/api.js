@@ -74,6 +74,7 @@ export const api = {
   verifyPasskeyLogin:  (body) => request('/auth/passkeys/login/verify',  { method: 'POST', body: JSON.stringify(body) }),
   me:               ()     => request('/auth/me'),
   updateName:         (body) => request('/auth/name',          { method: 'PUT',  body: JSON.stringify(body) }),
+  updateTimezone:     (body) => request('/auth/timezone',      { method: 'PUT',  body: JSON.stringify(body) }),
   changePassword:     (body) => request('/auth/password',      { method: 'PUT',  body: JSON.stringify(body) }),
   getPasskeys:         ()     => request('/auth/passkeys'),
   passkeyRegisterOptions: (body) => request('/auth/passkeys/register/options', { method: 'POST', body: JSON.stringify(body) }),

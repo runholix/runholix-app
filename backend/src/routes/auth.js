@@ -63,7 +63,7 @@ function signUser(user) {
 }
 
 function publicUser(user) {
-  return { id: user.user_id || user.id, email: user.email, name: user.name, avatar_path: user.avatar_path };
+  return { id: user.user_id || user.id, email: user.email, name: user.name, avatar_path: user.avatar_path, timezone: user.timezone };
 }
 
 async function saveChallenge({ userId = null, email = null, challenge, type }) {
@@ -113,7 +113,7 @@ router.post('/register', async (req, res) => {
       const { rows } = await pool.query(
         `INSERT INTO users (email, password_hash, name, is_active, activation_token, activation_expires)
          VALUES ($1, $2, $3, FALSE, $4, $5)
-         RETURNING id, email, name`,
+        RETURNING id, email, name, timezone`,
         [email.toLowerCase().trim(), hash, name.trim(), token, expires]
       );
 
@@ -128,7 +128,7 @@ router.post('/register', async (req, res) => {
       const { rows } = await pool.query(
         `INSERT INTO users (email, password_hash, name, is_active)
          VALUES ($1, $2, $3, TRUE)
-         RETURNING id, email, name`,
+         RETURNING id, email, name, timezone`,
         [email.toLowerCase().trim(), hash, name.trim()]
       );
       const token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -156,7 +156,7 @@ router.post('/activate', async (req, res) => {
          WHERE activation_token = $2
            AND activation_expires > NOW()
            AND is_active = FALSE
-         RETURNING id, email, name`,
+         RETURNING id, email, name, timezone`,
         [approvalToken, token]
       );
       if (!rows.length) {
@@ -178,7 +178,7 @@ router.post('/activate', async (req, res) => {
          WHERE activation_token = $1
            AND activation_expires > NOW()
            AND is_active = FALSE
-         RETURNING id, email, name`,
+         RETURNING id, email, name, timezone`,
         [token]
       );
       if (!rows.length) {
@@ -186,7 +186,7 @@ router.post('/activate', async (req, res) => {
       }
       sendWelcomeEmail(rows[0].email, rows[0].name).catch(() => {});
       const jwt_token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-      res.json({ token: jwt_token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name } });
+      res.json({ token: jwt_token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name, timezone: rows[0].timezone } });
     }
   } catch (err) {
     console.error(err);
@@ -212,7 +212,7 @@ router.get('/admin-approve', async (req, res) => {
         `UPDATE users
          SET is_active = TRUE, pending_approval = FALSE, approval_token = NULL
          WHERE approval_token = $1 AND pending_approval = TRUE
-         RETURNING id, email, name`,
+         RETURNING id, email, name, timezone`,
         [token]
       );
       if (!rows.length) return res.status(400).send('Token not found or account already processed.');
@@ -387,7 +387,7 @@ router.post('/login', async (req, res) => {
       });
     }
     const token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name, avatar_path: rows[0].avatar_path } });
+    res.json({ token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name, avatar_path: rows[0].avatar_path, timezone: rows[0].timezone } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -479,7 +479,7 @@ router.get('/me', async (req, res) => {
   try {
     const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET);
     const { rows } = await pool.query(
-      'SELECT id, email, name, avatar_path FROM users WHERE id = $1 AND is_active = TRUE',
+    'SELECT id, email, name, avatar_path, timezone FROM users WHERE id = $1 AND is_active = TRUE',
       [payload.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -503,6 +503,22 @@ router.put('/name', requireAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
     res.json(rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.put('/timezone', requireAuth, async (req, res) => {
+  const timezone = String(req.body.timezone || '').trim();
+  if (!timezone) return res.status(400).json({ error: 'Timezone is required' });
+  try {
+    const { rows } = await pool.query(
+      'UPDATE users SET timezone=$1 WHERE id=$2 RETURNING id, email, name, avatar_path, timezone',
+      [timezone, req.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // ── CHANGE PASSWORD ───────────────────────────────────────────────────────
@@ -694,14 +710,14 @@ router.post('/confirm-email', async (req, res) => {
        WHERE email_change_token=$1
          AND email_change_expires > NOW()
          AND pending_email IS NOT NULL
-       RETURNING id, email, name`,
+       RETURNING id, email, name, timezone`,
       [token]
     );
     if (!rows.length)
       return res.status(400).json({ error: 'Invalid or expired confirmation link.' });
     // Return fresh JWT with updated email
     const jwt_token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token: jwt_token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name } });
+    res.json({ token: jwt_token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name, timezone: rows[0].timezone } });
   } catch (err) {
     console.error(err);
     if (err.code === '23505') {

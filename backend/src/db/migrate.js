@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   name TEXT NOT NULL,
+  timezone TEXT NOT NULL DEFAULT 'UTC',
   is_active BOOLEAN NOT NULL DEFAULT FALSE,
   activation_token TEXT,
   activation_expires TIMESTAMPTZ,

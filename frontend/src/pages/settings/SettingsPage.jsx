@@ -6,6 +6,7 @@ import EmailSection from "./EmailSection.jsx";
 import PasswordSection from "./PasswordSection.jsx";
 import PasskeySection from "./PasskeySection.jsx";
 import CalendarFeedSection from "./CalendarFeedSection.jsx";
+import TimezoneSection from "./TimezoneSection.jsx";
 
 // ── Generic section card ───────────────────────────────────────────────────
 export function Section({ title, description, children }) {
@@ -39,6 +40,7 @@ export default function SettingsPage() {
 
       <AvatarSection   user={currentUser} onUpdate={handleUpdate} />
       <NameSection     user={currentUser} onUpdate={u => handleUpdate({ name: u.name })} />
+      <TimezoneSection user={currentUser} onUpdate={u => handleUpdate({ timezone: u.timezone })} />
       <EmailSection    user={currentUser} />
       <PasswordSection />
       <PasskeySection />

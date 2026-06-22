@@ -33,6 +33,14 @@ function parseTimeToSeconds(t) {
   if (parts.length === 2) return parts[0] * 60 + parts[1];
   return null;
 }
+function yearDateRange(year) {
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year + 1, 0, 1));
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
+}
 function mapRace(row) {
   return {
     ...row,
@@ -47,6 +55,7 @@ function mapRace(row) {
 router.get('/calendar', async (req, res) => {
   const year = Number(req.query.year);
   if (!year) return res.status(400).json({ error: 'year required' });
+  const { start, end } = yearDateRange(year);
 
   try {
     const { rows } = await pool.query(
@@ -65,10 +74,11 @@ router.get('/calendar', async (req, res) => {
           r.rpc_status
         FROM races r
         WHERE r.user_id = $1
-          AND EXTRACT(YEAR FROM r.race_date) = $2
+          AND r.race_date >= $2::date
+          AND r.race_date < $3::date
         ORDER BY r.race_date, r.created_at
       `,
-      [req.userId, year]
+      [req.userId, start, end]
     );
     res.json(rows);
   } catch (err) {
@@ -122,13 +132,13 @@ router.get('/dashboard', async (req, res) => {
       pool.query(
         `
           SELECT
-            EXTRACT(YEAR FROM r.race_date)::int AS year,
+            date_trunc('year', r.race_date)::date AS year_start,
             COUNT(*)::int AS count,
             COALESCE(SUM(r.distance_km) FILTER (WHERE r.status = 'completed'), 0) AS total_distance_km,
             COALESCE(SUM(r.elevation_gain_m) FILTER (WHERE r.status = 'completed'), 0) AS total_elevation_m
           ${baseSql}
           GROUP BY 1
-          ORDER BY year DESC
+          ORDER BY year_start DESC
         `,
         [req.userId]
       ),
@@ -138,7 +148,7 @@ router.get('/dashboard', async (req, res) => {
       upcoming: upcomingRows.rows.map(mapRace),
       recent: recentRows.rows.map(mapRace),
       yearlyCounts: yearlyRows.rows.map(r => ({
-        year: String(r.year),
+        year: String(new Date(r.year_start).getUTCFullYear()),
         count: r.count,
         total_distance_km: Number(r.total_distance_km || 0),
         total_elevation_m: Number(r.total_elevation_m || 0),
@@ -160,7 +170,11 @@ router.get('/', async (req, res) => {
   const params = [req.userId];
   let i = 2;
   if (status) { where += ` AND r.status = $${i++}`; params.push(status); }
-  if (year)   { where += ` AND EXTRACT(YEAR FROM r.race_date) = $${i++}`; params.push(year); }
+  if (year) {
+    const { start, end } = yearDateRange(Number(year));
+    where += ` AND r.race_date >= $${i++}::date AND r.race_date < $${i++}::date`;
+    params.push(start, end);
+  }
   if (search) {
     where += ` AND (r.event_name ILIKE $${i} OR r.location ILIKE $${i} OR r.city ILIKE $${i})`;
     params.push(`%${search}%`); i++;
@@ -169,11 +183,18 @@ router.get('/', async (req, res) => {
   const safeOrder = order === 'asc' ? 'ASC' : 'DESC';
   const countSql = `SELECT COUNT(*)::int AS total${where}`;
   const dataSql = `SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime, r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end${where} ORDER BY ${safeSort} ${safeOrder} LIMIT $${i} OFFSET $${i + 1}`;
-  const yearsSql = `SELECT DISTINCT EXTRACT(YEAR FROM r.race_date)::int AS year${where} ORDER BY year DESC`;
   try {
     const { rows: countRows } = await pool.query(countSql, params);
     const { rows } = await pool.query(dataSql, [...params, limit, offset]);
-    const { rows: yearRows } = await pool.query(yearsSql, params);
+    const { rows: yearRows } = await pool.query(
+      `
+        SELECT DISTINCT date_trunc('year', r.race_date)::date AS year_start
+        FROM races r
+        WHERE r.user_id = $1
+        ORDER BY year_start DESC
+      `,
+      [req.userId]
+    );
     const total = countRows[0]?.total || 0;
     res.json({
       items: rows.map(mapRace),
@@ -181,7 +202,7 @@ router.get('/', async (req, res) => {
       page: currentPage,
       pageSize: limit,
       totalPages: Math.max(1, Math.ceil(total / limit)),
-      years: yearRows.map(r => String(r.year)).filter(Boolean),
+      years: yearRows.map(r => String(new Date(r.year_start).getUTCFullYear())).filter(Boolean),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
@@ -191,7 +212,7 @@ router.get('/stats', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       WITH base AS (
-        SELECT *
+        SELECT id, status, distance_km, elevation_gain_m, finish_time_seconds, race_date
         FROM races
         WHERE user_id = $1
       ),

@@ -6,6 +6,14 @@ const router = Router();
 router.use(requireAuth);
 
 function str(v) { return (v === '' || v === undefined) ? null : v; }
+function yearDateRange(year) {
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year + 1, 0, 1));
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
+}
 
 // ── LIST (optionally filter by year-month) ────────────────────────────────
 router.get('/', async (req, res) => {
@@ -27,8 +35,9 @@ router.get('/', async (req, res) => {
   const params = [req.userId];
   let i = 2;
   if (year) {
-    query += ` AND EXTRACT(YEAR FROM t.plan_date) = $${i++}`;
-    params.push(year);
+    const { start, end } = yearDateRange(Number(year));
+    query += ` AND t.plan_date >= $${i++}::date AND t.plan_date < $${i++}::date`;
+    params.push(start, end);
   }
   query += ' ORDER BY t.plan_date, t.plan_time';
   try {

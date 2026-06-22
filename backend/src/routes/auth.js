@@ -511,7 +511,7 @@ router.post('/login', async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
+      'SELECT id, email, name, password_hash, avatar_path, timezone, is_active FROM users WHERE email = $1',
       [normalizedEmail]
     );
     if (!rows.length) {
@@ -674,7 +674,10 @@ router.put('/password', requireAuth, async (req, res) => {
   if (new_password.length < 8)
     return res.status(400).json({ error: 'New password must be at least 8 characters' });
   try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.userId]);
+    const { rows } = await pool.query(
+      'SELECT id, email, name, password_hash FROM users WHERE id=$1',
+      [req.userId]
+    );
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
     const ok = await bcrypt.compare(current_password, rows[0].password_hash);
     if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
@@ -808,7 +811,10 @@ router.put('/email', requireAuth, async (req, res) => {
   try {
     client = await pool.connect();
     await client.query('BEGIN');
-    const { rows } = await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE', [req.userId]);
+    const { rows } = await client.query(
+      'SELECT id, email, name, password_hash FROM users WHERE id=$1 FOR UPDATE',
+      [req.userId]
+    );
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
 
     // Verify password

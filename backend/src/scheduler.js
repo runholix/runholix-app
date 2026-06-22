@@ -12,6 +12,7 @@ import {
 } from './email.js';
 
 const DEFAULT_TZ = process.env.APP_TIMEZONE || 'UTC';
+let schedulerRunning = false;
 
 function zonedDateParts(date, timeZone) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -78,16 +79,25 @@ function localDateTimeToUtcMillis(dateStr, timeStr, timeZone) {
 
 async function runReminders() {
   if (!emailEnabled) return;
+  if (schedulerRunning) {
+    console.log('[scheduler] Skipping run - previous execution still in progress');
+    return;
+  }
 
   const now = new Date();
   const nowUtc = now.toISOString();
   console.log(`[scheduler] Running reminders - ${nowUtc}`);
+  schedulerRunning = true;
 
   let totals = { race: 0, rpc: 0, rpcEnd: 0, fillRpc7: 0, fillRpc3: 0, fillResults: 0, regD1: 0, regT1h: 0, regD3: 0 };
 
   try {
     const { rows: regRows } = await pool.query(`
-      SELECT r.*, u.email AS user_email, u.name AS user_name,
+      SELECT r.id, r.user_id, r.event_name, r.race_date, r.status, r.registration_datetime,
+             r.timezone, r.flag_off_time, r.cutoff_time, r.city, r.country,
+             r.registration_reminder_d1_sent_at,
+             r.registration_reminder_t1h_sent_at, r.registration_reminder_d3_sent_at,
+             u.email AS user_email, u.name AS user_name,
              COALESCE(NULLIF(r.timezone, ''), NULLIF(u.timezone, ''), $1) AS effective_timezone
       FROM races r
       JOIN users u ON u.id = r.user_id
@@ -148,7 +158,10 @@ async function runReminders() {
 
     // ── 4. D-1: Race day tomorrow ─────────────────────────────────────────
     const { rows: raceRows } = await pool.query(`
-      SELECT r.*, u.email, u.name
+      SELECT r.id, r.event_name, r.race_date, r.status, r.race_day_reminder_sent_at,
+             r.flag_off_time, r.cutoff_time, r.city, r.country,
+             r.bib_number, r.distance_label, r.distance_km, r.timezone,
+             u.email, u.name
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE r.race_date = $1
@@ -164,7 +177,9 @@ async function runReminders() {
 
     // ── 5. D-1: Race pack collection starts tomorrow ──────────────────────
     const { rows: rpcRows } = await pool.query(`
-      SELECT r.*, u.email, u.name
+      SELECT r.id, r.event_name, r.rpc_date_start, r.rpc_date_end, r.status, r.rpc_reminder_sent_at,
+             r.rpc_time, r.rpc_location, r.timezone,
+             u.email, u.name
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE r.rpc_date_start = $1
@@ -180,7 +195,9 @@ async function runReminders() {
 
     // ── 6. D day: Race pack collection ends today, RPC status still not collected ──────────────────────
     const { rows: rpcEndRows } = await pool.query(`
-      SELECT r.*, u.email, u.name
+      SELECT r.id, r.event_name, r.race_date, r.rpc_date_start, r.rpc_date_end, r.rpc_time,
+             r.rpc_location, r.rpc_status, r.status, r.rpc_end_reminder_sent_at, r.timezone,
+             u.email, u.name
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE r.rpc_date_end = $1
@@ -197,7 +214,9 @@ async function runReminders() {
 
     // ── 7. D-7: Race in 7 days but no RPC details yet ─────────────────────
     const { rows: noRpc7Rows } = await pool.query(`
-      SELECT r.*, u.email, u.name
+      SELECT r.id, r.event_name, r.race_date, r.status, r.rpc_date_start, r.fill_rpc7_reminder_sent_at,
+             r.city, r.country, r.distance_label, r.distance_km, r.timezone,
+             u.email, u.name
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE r.race_date = $1
@@ -214,7 +233,9 @@ async function runReminders() {
 
     // ── 8. D-3: Race in 3 days but still no RPC details ───────────────────
     const { rows: noRpc3Rows } = await pool.query(`
-      SELECT r.*, u.email, u.name
+      SELECT r.id, r.event_name, r.race_date, r.status, r.rpc_date_start, r.fill_rpc3_reminder_sent_at,
+             r.city, r.country, r.distance_label, r.distance_km, r.timezone,
+             u.email, u.name
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE r.race_date = $1
@@ -231,7 +252,9 @@ async function runReminders() {
 
     // ── 9. D+3: Race was 3 days ago, status still registered/upcoming ─────
     const { rows: noResultRows } = await pool.query(`
-      SELECT r.*, u.email, u.name
+      SELECT r.id, r.event_name, r.race_date, r.status, r.fill_results_reminder_sent_at,
+             r.city, r.country, r.distance_label, r.distance_km, r.bib_number, r.timezone,
+             u.email, u.name
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE r.race_date = $1
@@ -252,6 +275,8 @@ async function runReminders() {
     );
   } catch (err) {
     console.error('[scheduler] Error:', err.message);
+  } finally {
+    schedulerRunning = false;
   }
 }
 
@@ -260,6 +285,6 @@ export function startScheduler() {
     console.log('[scheduler] Email disabled - scheduler not started');
     return;
   }
-  cron.schedule('* * * * *', runReminders);
-  console.log('[scheduler] Started - minute reminders');
+  cron.schedule('0,30 * * * *', runReminders);
+  console.log('[scheduler] Started - runs at minute 00 and 30');
 }

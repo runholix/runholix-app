@@ -3,6 +3,7 @@ import { pathToFileURL } from 'url';
 
 const schema = `
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -165,8 +166,19 @@ CREATE INDEX IF NOT EXISTS idx_training_date  ON training_plans(plan_date);
 CREATE INDEX IF NOT EXISTS idx_races_user_id  ON races(user_id);
 CREATE INDEX IF NOT EXISTS idx_races_race_date ON races(race_date DESC);
 CREATE INDEX IF NOT EXISTS idx_races_status ON races(status);
+CREATE INDEX IF NOT EXISTS idx_races_user_race_date ON races(user_id, race_date DESC);
+CREATE INDEX IF NOT EXISTS idx_races_event_name_trgm ON races USING gin (event_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_races_location_trgm ON races USING gin (location gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_races_city_trgm ON races USING gin (city gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_users_activation_token ON users(activation_token);
+CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token);
+CREATE INDEX IF NOT EXISTS idx_users_approval_token ON users(approval_token);
+CREATE INDEX IF NOT EXISTS idx_users_ical_token ON users(ical_token);
+CREATE INDEX IF NOT EXISTS idx_users_email_change_token ON users(email_change_token);
 CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
 CREATE INDEX IF NOT EXISTS idx_passkey_challenges_lookup ON passkey_challenges(challenge, type);
+CREATE INDEX IF NOT EXISTS idx_passkey_challenges_user_lookup ON passkey_challenges(user_id, type);
+CREATE INDEX IF NOT EXISTS idx_passkey_challenges_email_lookup ON passkey_challenges(email, type);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_last_sent_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_sent_count_24h INTEGER NOT NULL DEFAULT 0;

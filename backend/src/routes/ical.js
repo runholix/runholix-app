@@ -182,6 +182,12 @@ function buildIcs(userId, userName, races, training) {
 // Calendar clients subscribe to this URL and poll it automatically.
 router.get('/:token.ics', async (req, res) => {
   try {
+    const now = new Date();
+    const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, now.getUTCDate()));
+    const windowEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 6, now.getUTCDate()));
+    const windowStartDate = windowStart.toISOString().slice(0, 10);
+    const windowEndDate = windowEnd.toISOString().slice(0, 10);
+
     const { rows: users } = await pool.query(
       'SELECT id, name FROM users WHERE ical_token = $1 AND ical_enabled = TRUE',
       [req.params.token]
@@ -192,13 +198,32 @@ router.get('/:token.ics', async (req, res) => {
 
     // Fetch all races — cast date columns to text so .slice() is safe
     const { rows: races } = await pool.query(
-      `SELECT *,
-         race_date::text        AS race_date,
+      `SELECT
+         id,
+         event_name,
+         race_date::text AS race_date,
+         status,
+         flag_off_time,
          registration_datetime::text AS registration_datetime,
-         rpc_date_start::text   AS rpc_date_start,
-         rpc_date_end::text     AS rpc_date_end
-       FROM races WHERE user_id = $1 ORDER BY races.race_date DESC`,
-      [userId]
+         rpc_date_start::text AS rpc_date_start,
+         rpc_date_end::text AS rpc_date_end,
+         rpc_time,
+         rpc_location,
+         rpc_status,
+         distance_label,
+         distance_km,
+         bib_number,
+         category,
+         website_url,
+         location,
+         city,
+         country
+       FROM races
+       WHERE user_id = $1
+         AND race_date >= $2::date
+         AND race_date <= $3::date
+       ORDER BY race_date DESC`,
+      [userId, windowStartDate, windowEndDate]
     );
 
     // Fetch all training plans (with race name) — cast date to text
@@ -208,8 +233,11 @@ router.get('/:token.ics', async (req, res) => {
          r.event_name           AS race_name
        FROM training_plans t
        LEFT JOIN races r ON r.id = t.race_id AND r.user_id = t.user_id
-       WHERE t.user_id = $1 ORDER BY t.plan_date`,
-      [userId]
+       WHERE t.user_id = $1
+         AND t.plan_date >= $2::date
+         AND t.plan_date <= $3::date
+       ORDER BY t.plan_date`,
+      [userId, windowStartDate, windowEndDate]
     );
 
     const ics = buildIcs(userId, name, races, training);

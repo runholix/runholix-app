@@ -77,6 +77,40 @@ function localDateTimeToUtcMillis(dateStr, timeStr, timeZone) {
   return utc;
 }
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function withRetry(task, label, maxAttempts = 3) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await task();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        await delay(200 * attempt);
+      }
+    }
+  }
+  console.error(`[scheduler] SMTP send failed after ${maxAttempts} attempts: ${label}`, lastErr?.message || lastErr);
+  return null;
+}
+
+async function runWithConcurrency(tasks, concurrency = 3) {
+  let index = 0;
+  const worker = async () => {
+    while (index < tasks.length) {
+      const current = index;
+      index += 1;
+      const task = tasks[current];
+      await task();
+    }
+  };
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker());
+  await Promise.all(workers);
+}
+
 async function runReminders() {
   if (!emailEnabled) return;
   if (schedulerRunning) {
@@ -84,16 +118,34 @@ async function runReminders() {
     return;
   }
 
-  const now = new Date();
-  const nowUtc = now.toISOString();
-  console.log(`[scheduler] Running reminders - ${nowUtc}`);
   schedulerRunning = true;
+  const now = new Date();
+  console.log(`[scheduler] Running reminders - ${now.toISOString()}`);
 
-  let totals = { race: 0, rpc: 0, rpcEnd: 0, fillRpc7: 0, fillRpc3: 0, fillResults: 0, regD1: 0, regT1h: 0, regD3: 0 };
+  const totals = { race: 0, rpc: 0, rpcEnd: 0, fillRpc7: 0, fillRpc3: 0, fillResults: 0, regD1: 0, regT1h: 0, regD3: 0 };
+  const sendJobs = [];
+  const updateBuckets = {
+    registration_reminder_d1_sent_at: new Set(),
+    registration_reminder_t1h_sent_at: new Set(),
+    registration_reminder_d3_sent_at: new Set(),
+    race_day_reminder_sent_at: new Set(),
+    rpc_reminder_sent_at: new Set(),
+    rpc_end_reminder_sent_at: new Set(),
+    fill_rpc7_reminder_sent_at: new Set(),
+    fill_rpc3_reminder_sent_at: new Set(),
+    fill_results_reminder_sent_at: new Set(),
+  };
+
+  const flushUpdates = async () => {
+    for (const [column, ids] of Object.entries(updateBuckets)) {
+      if (!ids.size) continue;
+      await pool.query(`UPDATE races SET ${column} = NOW() WHERE id = ANY($1::uuid[])`, [Array.from(ids)]);
+    }
+  };
 
   try {
     const { rows: regRows } = await pool.query(`
-      SELECT r.id, r.user_id, r.event_name, r.race_date, r.status, r.registration_datetime,
+      SELECT r.id, r.event_name, r.race_date, r.status, r.registration_datetime,
              r.timezone, r.flag_off_time, r.cutoff_time, r.city, r.country,
              r.registration_reminder_d1_sent_at,
              r.registration_reminder_t1h_sent_at, r.registration_reminder_d3_sent_at,
@@ -125,27 +177,35 @@ async function runReminders() {
 
       // ── 1. D-1: Race registration starts tomorrow ──────────────────────
       if (localToday === regD1 && !row.registration_reminder_d1_sent_at) {
-        await sendRegistrationReminder(row.user_email, row.user_name, row, 'd1').catch(() => {});
-        await pool.query('UPDATE races SET registration_reminder_d1_sent_at = NOW() WHERE id = $1', [row.id]);
-        totals.regD1 += 1;
+        sendJobs.push(async () => {
+          const sent = await withRetry(() => sendRegistrationReminder(row.user_email, row.user_name, row, 'd1'), `registration d1 ${row.id}`);
+          if (sent === null) return;
+          updateBuckets.registration_reminder_d1_sent_at.add(row.id);
+          totals.regD1 += 1;
+        });
       }
 
       // ── 2. T-1h: Race registration starts in 1 hour ──────────────────────
       if (regTime && localRegUtc !== null) {
         const oneHourBefore = localRegUtc - (60 * 60 * 1000);
-        const minuteWindow = Math.abs(now.getTime() - oneHourBefore) < 60 * 1000;
-        if (minuteWindow && !row.registration_reminder_t1h_sent_at) {
-          await sendRegistrationReminder(row.user_email, row.user_name, row, 't1h').catch(() => {});
-          await pool.query('UPDATE races SET registration_reminder_t1h_sent_at = NOW() WHERE id = $1', [row.id]);
-          totals.regT1h += 1;
+        if (Math.abs(now.getTime() - oneHourBefore) < 60 * 1000 && !row.registration_reminder_t1h_sent_at) {
+          sendJobs.push(async () => {
+            const sent = await withRetry(() => sendRegistrationReminder(row.user_email, row.user_name, row, 't1h'), `registration t1h ${row.id}`);
+            if (sent === null) return;
+            updateBuckets.registration_reminder_t1h_sent_at.add(row.id);
+            totals.regT1h += 1;
+          });
         }
       }
 
       // ── 3. D+3: Race registration was 3 days ago, status still upcoming ──────────────────────
       if (localToday === regD3 && !row.registration_reminder_d3_sent_at) {
-        await sendRegistrationFollowup(row.user_email, row.user_name, row).catch(() => {});
-        await pool.query('UPDATE races SET registration_reminder_d3_sent_at = NOW() WHERE id = $1', [row.id]);
-        totals.regD3 += 1;
+        sendJobs.push(async () => {
+          const sent = await withRetry(() => sendRegistrationFollowup(row.user_email, row.user_name, row), `registration d3 ${row.id}`);
+          if (sent === null) return;
+          updateBuckets.registration_reminder_d3_sent_at.add(row.id);
+          totals.regD3 += 1;
+        });
       }
     }
 
@@ -156,117 +216,114 @@ async function runReminders() {
     const minus3 = addDays(today, -3);
     if (!tomorrow || !in3days || !in7days || !minus3) throw new Error('Invalid scheduler date window');
 
-    // ── 4. D-1: Race day tomorrow ─────────────────────────────────────────
-    const { rows: raceRows } = await pool.query(`
-      SELECT r.id, r.event_name, r.race_date, r.status, r.race_day_reminder_sent_at,
-             r.flag_off_time, r.cutoff_time, r.city, r.country,
-             r.bib_number, r.distance_label, r.distance_km, r.timezone,
-             u.email, u.name
-      FROM races r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.race_date = $1
-        AND r.status IN ('registered', 'upcoming')
-        AND r.race_day_reminder_sent_at IS NULL
-        AND u.is_active = true
-    `, [tomorrow]);
-    for (const row of raceRows) {
-      await sendRaceReminder(row.email, row.name, row).catch(() => {});
-      await pool.query('UPDATE races SET race_day_reminder_sent_at = NOW() WHERE id = $1', [row.id]);
-    }
-    totals.race = raceRows.length;
 
-    // ── 5. D-1: Race pack collection starts tomorrow ──────────────────────
-    const { rows: rpcRows } = await pool.query(`
-      SELECT r.id, r.event_name, r.rpc_date_start, r.rpc_date_end, r.status, r.rpc_reminder_sent_at,
-             r.rpc_time, r.rpc_location, r.timezone,
-             u.email, u.name
+    const { rows: reminderRows } = await pool.query(`
+      SELECT
+        r.id,
+        r.event_name,
+        r.race_date,
+        r.status,
+        r.flag_off_time,
+        r.cutoff_time,
+        r.city,
+        r.country,
+        r.bib_number,
+        r.distance_label,
+        r.distance_km,
+        r.rpc_date_start,
+        r.rpc_date_end,
+        r.rpc_time,
+        r.rpc_location,
+        r.rpc_status,
+        r.race_day_reminder_sent_at,
+        r.rpc_reminder_sent_at,
+        r.rpc_end_reminder_sent_at,
+        r.fill_rpc7_reminder_sent_at,
+        r.fill_rpc3_reminder_sent_at,
+        r.fill_results_reminder_sent_at,
+        COALESCE(NULLIF(r.timezone, ''), NULLIF(u.timezone, ''), $1) AS effective_timezone,
+        u.email,
+        u.name
       FROM races r
       JOIN users u ON u.id = r.user_id
-      WHERE r.rpc_date_start = $1
-        AND r.status IN ('registered', 'upcoming')
-        AND r.rpc_reminder_sent_at IS NULL
-        AND u.is_active = true
-    `, [tomorrow]);
-    for (const row of rpcRows) {
-      await sendRpcReminder(row.email, row.name, row).catch(() => {});
-      await pool.query('UPDATE races SET rpc_reminder_sent_at = NOW() WHERE id = $1', [row.id]);
-    }
-    totals.rpc = rpcRows.length;
+      WHERE u.is_active = TRUE
+        AND (
+          (r.race_date = $2 AND r.status IN ('registered', 'upcoming') AND r.race_day_reminder_sent_at IS NULL)
+          OR (r.rpc_date_start = $2 AND r.status IN ('registered', 'upcoming') AND r.rpc_reminder_sent_at IS NULL)
+          OR (r.rpc_date_end = $3 AND r.status IN ('registered', 'upcoming') AND r.rpc_status = 'not_collected' AND r.rpc_end_reminder_sent_at IS NULL)
+          OR (r.race_date = $4 AND r.status IN ('registered', 'upcoming') AND NULLIF(r.rpc_date_start::text, '') IS NULL AND r.fill_rpc7_reminder_sent_at IS NULL)
+          OR (r.race_date = $5 AND r.status IN ('registered', 'upcoming') AND NULLIF(r.rpc_date_start::text, '') IS NULL AND r.fill_rpc3_reminder_sent_at IS NULL)
+          OR (r.race_date = $6 AND r.status IN ('registered', 'upcoming') AND r.fill_results_reminder_sent_at IS NULL)
+        )
+    `, [DEFAULT_TZ, tomorrow, today, in7days, in3days, minus3]);
 
-    // ── 6. D day: Race pack collection ends today, RPC status still not collected ──────────────────────
-    const { rows: rpcEndRows } = await pool.query(`
-      SELECT r.id, r.event_name, r.race_date, r.rpc_date_start, r.rpc_date_end, r.rpc_time,
-             r.rpc_location, r.rpc_status, r.status, r.rpc_end_reminder_sent_at, r.timezone,
-             u.email, u.name
-      FROM races r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.rpc_date_end = $1
-        AND r.status IN ('registered', 'upcoming')
-        AND r.rpc_status = 'not_collected'
-        AND r.rpc_end_reminder_sent_at IS NULL
-        AND u.is_active = true
-    `, [today]);
-    for (const row of rpcEndRows) {
-      await sendRpcEndReminder(row.email, row.name, row).catch(() => {});
-      await pool.query('UPDATE races SET rpc_end_reminder_sent_at = NOW() WHERE id = $1', [row.id]);
-    }
-    totals.rpcEnd = rpcEndRows.length;
+    for (const row of reminderRows) {
+      const payload = { ...row, timezone: row.effective_timezone || DEFAULT_TZ };
 
-    // ── 7. D-7: Race in 7 days but no RPC details yet ─────────────────────
-    const { rows: noRpc7Rows } = await pool.query(`
-      SELECT r.id, r.event_name, r.race_date, r.status, r.rpc_date_start, r.fill_rpc7_reminder_sent_at,
-             r.city, r.country, r.distance_label, r.distance_km, r.timezone,
-             u.email, u.name
-      FROM races r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.race_date = $1
-        AND r.status IN ('registered', 'upcoming')
-        AND NULLIF(r.rpc_date_start::text, '') IS NULL
-        AND r.fill_rpc7_reminder_sent_at IS NULL
-        AND u.is_active = true
-    `, [in7days]);
-    for (const row of noRpc7Rows) {
-      await sendFillRpcReminder(row.email, row.name, row, 7).catch(() => {});
-      await pool.query('UPDATE races SET fill_rpc7_reminder_sent_at = NOW() WHERE id = $1', [row.id]);
-    }
-    totals.fillRpc7 = noRpc7Rows.length;
+      // ── 4. D-1: Race day tomorrow ─────────────────────────────────────────
+      if (row.race_date === tomorrow && ['registered', 'upcoming'].includes(row.status) && !row.race_day_reminder_sent_at) {
+        sendJobs.push(async () => {
+          const sent = await withRetry(() => sendRaceReminder(row.email, row.name, payload), `race reminder ${row.id}`);
+          if (sent === null) return;
+          updateBuckets.race_day_reminder_sent_at.add(row.id);
+          totals.race += 1;
+        });
+      }
 
-    // ── 8. D-3: Race in 3 days but still no RPC details ───────────────────
-    const { rows: noRpc3Rows } = await pool.query(`
-      SELECT r.id, r.event_name, r.race_date, r.status, r.rpc_date_start, r.fill_rpc3_reminder_sent_at,
-             r.city, r.country, r.distance_label, r.distance_km, r.timezone,
-             u.email, u.name
-      FROM races r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.race_date = $1
-        AND r.status IN ('registered', 'upcoming')
-        AND NULLIF(r.rpc_date_start::text, '') IS NULL
-        AND r.fill_rpc3_reminder_sent_at IS NULL
-        AND u.is_active = true
-    `, [in3days]);
-    for (const row of noRpc3Rows) {
-      await sendFillRpcReminder(row.email, row.name, row, 3).catch(() => {});
-      await pool.query('UPDATE races SET fill_rpc3_reminder_sent_at = NOW() WHERE id = $1', [row.id]);
-    }
-    totals.fillRpc3 = noRpc3Rows.length;
+      // ── 5. D-1: Race pack collection starts tomorrow ──────────────────────
+      if (row.rpc_date_start === tomorrow && ['registered', 'upcoming'].includes(row.status) && !row.rpc_reminder_sent_at) {
+        sendJobs.push(async () => {
+          const sent = await withRetry(() => sendRpcReminder(row.email, row.name, payload), `rpc reminder ${row.id}`);
+          if (sent === null) return;
+          updateBuckets.rpc_reminder_sent_at.add(row.id);
+          totals.rpc += 1;
+        });
+      }
 
-    // ── 9. D+3: Race was 3 days ago, status still registered/upcoming ─────
-    const { rows: noResultRows } = await pool.query(`
-      SELECT r.id, r.event_name, r.race_date, r.status, r.fill_results_reminder_sent_at,
-             r.city, r.country, r.distance_label, r.distance_km, r.bib_number, r.timezone,
-             u.email, u.name
-      FROM races r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.race_date = $1
-        AND r.status IN ('registered', 'upcoming')
-        AND r.fill_results_reminder_sent_at IS NULL
-        AND u.is_active = true
-    `, [minus3]);
-    for (const row of noResultRows) {
-      await sendFillResultsReminder(row.email, row.name, row).catch(() => {});
-      await pool.query('UPDATE races SET fill_results_reminder_sent_at = NOW() WHERE id = $1', [row.id]);
+      // ── 6. D day: Race pack collection ends today, RPC status still not collected ──────────────────────
+      if (row.rpc_date_end === today && ['registered', 'upcoming'].includes(row.status) && row.rpc_status === 'not_collected' && !row.rpc_end_reminder_sent_at) {
+        sendJobs.push(async () => {
+          const sent = await withRetry(() => sendRpcEndReminder(row.email, row.name, payload), `rpc end reminder ${row.id}`);
+          if (sent === null) return;
+          updateBuckets.rpc_end_reminder_sent_at.add(row.id);
+          totals.rpcEnd += 1;
+        });
+      }
+
+      // ── 7. D-7: Race in 7 days but no RPC details yet ─────────────────────
+      if (row.race_date === in7days && ['registered', 'upcoming'].includes(row.status) && !row.rpc_date_start && !row.fill_rpc7_reminder_sent_at) {
+        sendJobs.push(async () => {
+          const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 7), `fill rpc 7 ${row.id}`);
+          if (sent === null) return;
+          updateBuckets.fill_rpc7_reminder_sent_at.add(row.id);
+          totals.fillRpc7 += 1;
+        });
+      }
+
+      // ── 8. D-3: Race in 3 days but still no RPC details ───────────────────
+      if (row.race_date === in3days && ['registered', 'upcoming'].includes(row.status) && !row.rpc_date_start && !row.fill_rpc3_reminder_sent_at) {
+        sendJobs.push(async () => {
+          const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 3), `fill rpc 3 ${row.id}`);
+          if (sent === null) return;
+          updateBuckets.fill_rpc3_reminder_sent_at.add(row.id);
+          totals.fillRpc3 += 1;
+        });
+      }
+
+      // ── 9. D+3: Race was 3 days ago, status still registered/upcoming ─────
+      if (row.race_date === minus3 && ['registered', 'upcoming'].includes(row.status) && !row.fill_results_reminder_sent_at) {
+        sendJobs.push(async () => {
+          const sent = await withRetry(() => sendFillResultsReminder(row.email, row.name, payload), `fill results ${row.id}`);
+          if (sent === null) return;
+          updateBuckets.fill_results_reminder_sent_at.add(row.id);
+          totals.fillResults += 1;
+        });
+      }
     }
-    totals.fillResults = noResultRows.length;
+
+    await runWithConcurrency(sendJobs, 3);
+
+    await flushUpdates();
 
     console.log(
       `[scheduler] Done - reg-d1:${totals.regD1} reg-t1h:${totals.regT1h} reg-d3:${totals.regD3} ` +

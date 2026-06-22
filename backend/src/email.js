@@ -9,9 +9,15 @@ function createTransport() {
   const secureMode = (process.env.SMTP_SECURE || 'tls').toLowerCase();
   const secure     = secureMode === 'ssl';
   const requireTLS = secureMode === 'tls';
+  const pool = String(process.env.SMTP_POOL || 'true').toLowerCase() !== 'false';
+  const maxConnections = Math.max(1, parseInt(process.env.SMTP_POOL_MAX_CONNECTIONS || '3', 10) || 3);
+  const maxMessages = Math.max(1, parseInt(process.env.SMTP_POOL_MAX_MESSAGES || '100', 10) || 100);
 
   return nodemailer.createTransport({
     host, port, secure,
+    pool,
+    maxConnections,
+    maxMessages,
     requireTLS: requireTLS && !secure,
     auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
     tls: { rejectUnauthorized: process.env.NODE_ENV === 'production' },

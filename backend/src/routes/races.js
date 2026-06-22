@@ -108,7 +108,11 @@ router.get('/dashboard', async (req, res) => {
       ),
       pool.query(
         `
-          SELECT EXTRACT(YEAR FROM r.race_date)::int AS year, COUNT(*)::int AS count
+          SELECT
+            EXTRACT(YEAR FROM r.race_date)::int AS year,
+            COUNT(*)::int AS count,
+            COALESCE(SUM(r.distance_km) FILTER (WHERE r.status = 'completed'), 0) AS total_distance_km,
+            COALESCE(SUM(r.elevation_gain_m) FILTER (WHERE r.status = 'completed'), 0) AS total_elevation_m
           ${baseSql}
           GROUP BY 1
           ORDER BY year DESC
@@ -120,7 +124,12 @@ router.get('/dashboard', async (req, res) => {
     res.json({
       upcoming: upcomingRows.rows.map(mapRace),
       recent: recentRows.rows.map(mapRace),
-      yearlyCounts: yearlyRows.rows.map(r => ({ year: String(r.year), count: r.count })),
+      yearlyCounts: yearlyRows.rows.map(r => ({
+        year: String(r.year),
+        count: r.count,
+        total_distance_km: Number(r.total_distance_km || 0),
+        total_elevation_m: Number(r.total_elevation_m || 0),
+      })),
     });
   } catch (err) {
     console.error(err);
@@ -168,17 +177,91 @@ router.get('/', async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const { rows } = await pool.query(`
+      WITH base AS (
+        SELECT *
+        FROM races
+        WHERE user_id = $1
+      ),
+      bests AS (
+        SELECT 'best_5k' AS key, id, finish_time_seconds, race_date
+        FROM base
+        WHERE status = 'completed' AND distance_km BETWEEN 4.9 AND 5.9 AND finish_time_seconds IS NOT NULL
+        UNION ALL
+        SELECT 'best_10k' AS key, id, finish_time_seconds, race_date
+        FROM base
+        WHERE status = 'completed' AND distance_km BETWEEN 9.9 AND 10.9 AND finish_time_seconds IS NOT NULL
+        UNION ALL
+        SELECT 'best_half' AS key, id, finish_time_seconds, race_date
+        FROM base
+        WHERE status = 'completed' AND distance_km BETWEEN 20.9 AND 22.9 AND finish_time_seconds IS NOT NULL
+        UNION ALL
+        SELECT 'best_marathon' AS key, id, finish_time_seconds, race_date
+        FROM base
+        WHERE status = 'completed' AND distance_km BETWEEN 41.9 AND 43.9 AND finish_time_seconds IS NOT NULL
+      ),
+      ranked AS (
+        SELECT
+          key,
+          id,
+          finish_time_seconds,
+          race_date,
+          ROW_NUMBER() OVER (PARTITION BY key ORDER BY finish_time_seconds ASC, race_date ASC, id ASC) AS rn
+        FROM bests
+      ),
+      all_time AS (
+        SELECT
+          MAX(finish_time_seconds) FILTER (WHERE key='best_5k' AND rn=1) AS unused
+        FROM ranked
+      ),
+      all_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE status='completed') AS total_completed,
+          COUNT(*) FILTER (WHERE status IN ('registered','upcoming')) AS upcoming_count,
+          COALESCE(SUM(distance_km) FILTER (WHERE status='completed'),0) AS total_distance_km,
+          COALESCE(SUM(elevation_gain_m) FILTER (WHERE status='completed'),0) AS total_elevation_m
+        FROM base
+      ),
+      best_all_time AS (
+        SELECT jsonb_object_agg(key, jsonb_build_object('race_id', id, 'finish_time_seconds', finish_time_seconds)) AS data
+        FROM ranked
+        WHERE rn = 1
+      ),
+      best_last_year AS (
+        SELECT jsonb_object_agg(key, jsonb_build_object('race_id', id, 'finish_time_seconds', finish_time_seconds)) AS data
+        FROM (
+          SELECT key, id, finish_time_seconds
+          FROM (
+            SELECT
+              key,
+              id,
+              finish_time_seconds,
+              race_date,
+              ROW_NUMBER() OVER (PARTITION BY key ORDER BY finish_time_seconds ASC, race_date ASC, id ASC) AS rn
+            FROM bests
+            WHERE race_date >= CURRENT_DATE - INTERVAL '1 year'
+          ) x
+          WHERE rn = 1
+        ) y
+      )
       SELECT
-        COUNT(*) FILTER (WHERE status='completed') AS total_completed,
-        COUNT(*) FILTER (WHERE status IN ('registered','upcoming')) AS upcoming_count,
-        COALESCE(SUM(distance_km) FILTER (WHERE status='completed'),0) AS total_distance_km,
-        COALESCE(SUM(elevation_gain_m) FILTER (WHERE status='completed'),0) AS total_elevation_m,
-        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 4.9 AND 5.2)   AS best_5k,
-        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 9.9 AND 10.2)  AS best_10k,
-        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 20.9 AND 21.2) AS best_half,
-        MIN(finish_time_seconds) FILTER (WHERE status='completed' AND distance_km BETWEEN 41.9 AND 42.3) AS best_marathon
-      FROM races WHERE user_id = $1`, [req.userId]);
-    res.json(rows[0]);
+        s.total_completed,
+        s.upcoming_count,
+        s.total_distance_km,
+        s.total_elevation_m,
+        COALESCE(a.data, '{}'::jsonb) AS best_all_time,
+        COALESCE(l.data, '{}'::jsonb) AS best_last_year
+      FROM all_stats s
+      CROSS JOIN best_all_time a
+      CROSS JOIN best_last_year l
+    `, [req.userId]);
+    const row = rows[0] || {};
+    res.json({
+      ...row,
+      personal_bests: {
+        all_time: row.best_all_time || {},
+        last_year: row.best_last_year || {},
+      },
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -484,6 +567,4 @@ router.delete('/:id', async (req, res) => {
 });
 
 export default router;
-
-
 

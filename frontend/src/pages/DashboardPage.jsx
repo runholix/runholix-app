@@ -6,10 +6,24 @@ import { useAuth } from '../hooks/useAuth.jsx';
 import { format, parseISO } from 'date-fns';
 import { fmtDist, fmtTime, paceStr } from "../lib/utils.js";
 
+function YearTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload || {};
+  return (
+    <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '8px 10px', fontSize: 13 }}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      <div>Races: {row.count ?? 0}</div>
+      <div>Distance: {fmtDist(row.total_distance_km)}</div>
+      <div>Elevation: {Number(row.total_elevation_m || 0).toLocaleString('en-US')} m</div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [dashboard, setDashboard] = useState({ upcoming: [], recent: [], yearlyCounts: [] });
+  const [pbWindow, setPbWindow] = useState('all_time');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -33,7 +47,19 @@ export default function DashboardPage() {
 
   const upcoming = dashboard.upcoming || [];
   const recent = dashboard.recent || [];
-  const chartData = (dashboard.yearlyCounts || []).map(({ year, count }) => ({ year, count }));
+  const chartData = (dashboard.yearlyCounts || []).map(({ year, count, total_distance_km, total_elevation_m }) => ({
+    year,
+    count,
+    total_distance_km,
+    total_elevation_m,
+  }));
+  const pbSet = stats?.personal_bests?.[pbWindow] || {};
+  const personalBests = [
+    { key: 'best_5k', label: '5 km', distKm: 5 },
+    { key: 'best_10k', label: '10 km', distKm: 10 },
+    { key: 'best_half', label: 'Half marathon', distKm: 21.0975 },
+    { key: 'best_marathon', label: 'Marathon', distKm: 42.195 },
+  ].map(item => ({ ...item, record: pbSet[item.key] || null }));
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
@@ -69,23 +95,50 @@ export default function DashboardPage() {
 
           <div className="grid-halves" style={{ marginBottom: 24 }}>
             <div className="card">
-              <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Personal bests</div>
-              {[
-                { label: '5 km', sec: stats?.best_5k, distKm: 5 },
-                { label: '10 km', sec: stats?.best_10k, distKm: 10 },
-                { label: 'Half marathon', sec: stats?.best_half, distKm: 21.0975 },
-                { label: 'Marathon', sec: stats?.best_marathon, distKm: 42.195 },
-              ].map(pb => (
-                <div key={pb.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-border)', gap: 8 }}>
-                  <span style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>{pb.label}</span>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontWeight: 500 }}>{pb.sec ? fmtTime(pb.sec) : '—'}</span>
-                    {paceStr(pb.sec, pb.distKm) && (
-                      <div style={{ fontSize: 11, color: 'var(--color-text-hint)', marginTop: 1 }}>{paceStr(pb.sec, pb.distKm)}</div>
-                    )}
-                  </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>Personal bests</div>
+                <div style={{ display: 'inline-flex', gap: 6, padding: 4, borderRadius: 8, background: 'var(--color-bg-secondary)' }}>
+                  {[
+                    { key: 'all_time', label: 'All time' },
+                    { key: 'last_year', label: 'Last 1 year' },
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setPbWindow(opt.key)}
+                      className="btn btn-sm"
+                      style={{
+                        minWidth: 0,
+                        background: pbWindow === opt.key ? 'var(--color-bg)' : 'transparent',
+                        border: pbWindow === opt.key ? '1px solid var(--color-border)' : '1px solid transparent',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </div>
+              {personalBests.map(pb => {
+                const hasRace = !!pb.record?.race_id;
+                const content = (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-border)', gap: 8 }}>
+                    <span style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>{pb.label}</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontWeight: 500 }}>{pb.record?.finish_time_seconds ? fmtTime(pb.record.finish_time_seconds) : '—'}</span>
+                      {paceStr(pb.record?.finish_time_seconds, pb.distKm) && (
+                        <div style={{ fontSize: 11, color: 'var(--color-text-hint)', marginTop: 1 }}>{paceStr(pb.record.finish_time_seconds, pb.distKm)}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+                return hasRace ? (
+                  <Link key={pb.key} to={`/races/${pb.record.race_id}`} style={{ display: 'block', color: 'inherit' }}>
+                    {content}
+                  </Link>
+                ) : (
+                  <div key={pb.key}>{content}</div>
+                );
+              })}
             </div>
 
             <div className="card">
@@ -95,7 +148,7 @@ export default function DashboardPage() {
                   <BarChart data={chartData} barSize={32}>
                     <XAxis dataKey="year" tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} />
                     <YAxis hide />
-                    <Tooltip cursor={{ fill: 'var(--color-bg)' }} contentStyle={{ fontSize: 13, border: '1px solid var(--color-border)', borderRadius: 8 }} />
+                    <Tooltip cursor={{ fill: 'var(--color-bg)' }} content={<YearTooltip />} />
                     <Bar dataKey="count" radius={[4,4,0,0]}>
                       {chartData.map((_, i) => <Cell key={i} fill={i === chartData.length - 1 ? '#1d4ed8' : '#93c5fd'} />)}
                     </Bar>

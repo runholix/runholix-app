@@ -10,7 +10,7 @@ import {
 } from '@simplewebauthn/server';
 import { isoBase64URL, isoUint8Array } from '@simplewebauthn/server/helpers';
 import pool from '../db/pool.js';
-import { emailEnabled, sendActivationEmail, sendWelcomeEmail, sendPasswordChangedEmail, sendPasswordResetEmail, sendEmailChangeConfirmation, sendAdminApprovalRequest, sendAccountApproved, sendPasskeyAddedEmail, sendPasskeyRemovedEmail } from '../email.js';
+import { emailEnabled, sendActivationEmail, sendWelcomeEmail, sendPasswordChangedEmail, sendPasswordResetEmail, sendEmailChangeConfirmation, sendAdminApprovalRequest, sendAccountApproved, sendAccountRejected, sendPasskeyAddedEmail, sendPasskeyRemovedEmail } from '../email.js';
 
 const router = Router();
 
@@ -203,9 +203,8 @@ router.post('/activate', async (req, res) => {
         return res.status(400).json({ error: 'Invalid or expired activation link. Please register again.' });
       }
       const user = rows[0];
-      const approveUrl = `${process.env.APP_URL}/api/auth/admin-approve?token=${approvalToken}&action=approve`;
-      const rejectUrl  = `${process.env.APP_URL}/api/auth/admin-approve?token=${approvalToken}&action=reject`;
-      sendAdminApprovalRequest(ADMIN_EMAIL, user, approveUrl, rejectUrl).catch(() => {});
+      const reviewUrl = `${APP_URL}/admin-approve?token=${approvalToken}`;
+      sendAdminApprovalRequest(ADMIN_EMAIL, user, reviewUrl).catch(() => {});
       return res.json({
         requiresApproval: true,
         message: 'Email confirmed! Your account is now awaiting admin approval. You will receive an email once approved.',
@@ -235,16 +234,34 @@ router.post('/activate', async (req, res) => {
 });
 
 // ── ADMIN APPROVE / REJECT ────────────────────────────────────────────────
-// Handles GET links clicked from the admin approval email.
-// action=approve → activate user, send approval email
-// action=reject  → delete user record
+// Review page submits decision and optional message from the frontend.
 router.get('/admin-approve', async (req, res) => {
-  const { token, action } = req.query;
-  if (!token || !['approve', 'reject'].includes(action)) {
-    return res.status(400).send('Invalid request.');
+  const { token } = req.query;
+  if (!token) return res.status(404).json({ error: 'Not found.' });
+  if (!ADMIN_EMAIL) return res.status(404).json({ error: 'Not found.' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT name, email
+       FROM users
+       WHERE approval_token = $1 AND pending_approval = TRUE
+       LIMIT 1`,
+      [token]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found.' });
+    return res.json({ user: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error. Please try again.' });
   }
-  // Simple security: only allowed when ADMIN_EMAIL is configured
-  if (!ADMIN_EMAIL) return res.status(403).send('Admin approval is not enabled.');
+});
+
+router.post('/admin-approve', async (req, res) => {
+  const { token, action, message } = req.body || {};
+  if (!token || !['approve', 'reject'].includes(action)) {
+    return res.status(404).json({ error: 'Not found.' });
+  }
+  if (!ADMIN_EMAIL) return res.status(404).json({ error: 'Not found.' });
 
   try {
     if (action === 'approve') {
@@ -255,35 +272,32 @@ router.get('/admin-approve', async (req, res) => {
          RETURNING id, email, name, timezone`,
         [token]
       );
-      if (!rows.length) return res.status(400).send('Token not found or account already processed.');
+      if (!rows.length) return res.status(404).json({ error: 'Not found.' });
       sendWelcomeEmail(rows[0].email, rows[0].name).catch(() => {});
-      sendAccountApproved(rows[0].email, rows[0].name).catch(() => {});
-      return res.send(`
-        <html><body style="font-family:sans-serif;padding:40px;max-width:480px;margin:auto">
-          <h2 style="color:#15803d">✓ Account approved</h2>
-          <p><strong>${rows[0].name}</strong> (${rows[0].email}) can now sign in to ${process.env.APP_NAME || 'Runholix'}.</p>
-          <p style="color:#6b6860;font-size:13px">An approval notification has been sent to the user.</p>
-        </body></html>
-      `);
-    } else {
-      // reject — delete user entirely
-      const { rows } = await pool.query(
-        `DELETE FROM users WHERE approval_token = $1 AND pending_approval = TRUE
-         RETURNING name, email`,
-        [token]
-      );
-      if (!rows.length) return res.status(400).send('Token not found or account already processed.');
-      return res.send(`
-        <html><body style="font-family:sans-serif;padding:40px;max-width:480px;margin:auto">
-          <h2 style="color:#dc2626">✗ Account rejected</h2>
-          <p>The account for <strong>${rows[0].name}</strong> (${rows[0].email}) has been deleted.</p>
-          <p style="color:#6b6860;font-size:13px">The user was not notified of the rejection.</p>
-        </body></html>
-      `);
+      sendAccountApproved(rows[0].email, rows[0].name, message || '').catch(() => {});
+      return res.json({
+        message: 'Account approved and notification email sent.',
+        user: { name: rows[0].name, email: rows[0].email },
+      });
     }
+
+    const { rows } = await pool.query(
+      `DELETE FROM users WHERE approval_token = $1 AND pending_approval = TRUE
+       RETURNING name, email`,
+      [token]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found.' });
+    if (String(message || '').trim()) {
+      sendAccountRejected(rows[0].email, rows[0].name, message).catch(() => {});
+    }
+    return res.json({
+      message: String(message || '').trim() ? 'Account rejected and notification email sent.' : 'Account rejected.',
+      user: { name: rows[0].name, email: rows[0].email },
+      notified: Boolean(String(message || '').trim()),
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error. Please try again.');
+    res.status(500).json({ error: 'Server error. Please try again.' });
   }
 });
 

@@ -6,6 +6,8 @@ import LoginPage from './pages/public/LoginPage.jsx';
 import ForgotPassword from './pages/public/ForgotPassword.jsx';
 import RegisterPage from './pages/public/RegisterPage.jsx';
 import ActivatePage from './pages/public/ActivatePage.jsx';
+import AdminApprovalPage from './pages/public/AdminApprovalPage.jsx';
+import NotFoundPage from './pages/public/NotFoundPage.jsx';
 import SettingsPage from './pages/settings/SettingsPage.jsx';
 import ConfirmEmailPage from './pages/public/ConfirmEmailPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
@@ -41,6 +43,7 @@ export default function App() {
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
           <Route path="/activate" element={<ActivatePage />} />
+          <Route path="/admin-approve" element={<AdminApprovalPage />} />
           <Route path="/confirm-email" element={<ConfirmEmailPage />} />
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<DashboardPage />} />
@@ -52,6 +55,7 @@ export default function App() {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="/ical/*" element={null} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

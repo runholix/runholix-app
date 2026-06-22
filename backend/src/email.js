@@ -245,7 +245,7 @@ export async function sendEmailChangeConfirmation(to, name, token) {
 }
 
 // ── Admin approval request ───────────────────────────────────────────────
-export async function sendAdminApprovalRequest(adminEmail, user, approveUrl, rejectUrl) {
+export async function sendAdminApprovalRequest(adminEmail, user, reviewUrl) {
   await send(adminEmail, `New user awaiting approval: ${user.name}`, wrap('New account approval required', `
     <p>A new user has confirmed their email address and is awaiting your approval to access ${escHtml(APP_NAME)}.</p>
     <div class="info">
@@ -253,28 +253,30 @@ export async function sendAdminApprovalRequest(adminEmail, user, approveUrl, rej
       <p><strong>Email:</strong> ${escHtml(user.email)}</p>
     </div>
     <p>Please review and take action:</p>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-      <tr>
-        <td style="padding:0 8px 0 0">
-          <a href="${approveUrl}" class="btn" style="background:#15803d;display:block;text-align:center">✓ Approve account</a>
-        </td>
-        <td style="padding:0 0 0 8px">
-          <a href="${rejectUrl}" class="btn" style="background:#dc2626;display:block;text-align:center">✗ Reject &amp; delete</a>
-        </td>
-      </tr>
-    </table>
-    <p style="font-size:12px;color:#9b9890;margin-top:16px">Approve: ${approveUrl}<br>Reject: ${rejectUrl}</p>
+    <a href="${reviewUrl}" class="btn" style="display:block;text-align:center">Open approval review</a>
+    <p style="font-size:12px;color:#9b9890;margin-top:16px">Review link: ${reviewUrl}</p>
   `));
 }
 
 // ── User approved notification ────────────────────────────────────────────
-export async function sendAccountApproved(to, name) {
+export async function sendAccountApproved(to, name, adminMessage = '') {
   const link = `${APP_URL}/login`;
   await send(to, `Your ${APP_NAME} account has been approved!`, wrap('Account approved 🎉', `
     <p>Hi <strong>${escHtml(name)}</strong>,</p>
     <p>Great news — an admin has approved your ${escHtml(APP_NAME)} account. You can now sign in and start tracking your races!</p>
+    ${adminMessage?.trim() ? `<div class="info"><p><strong>Admin message:</strong><br>${escHtml(adminMessage).replace(/\n/g, '<br>')}</p></div>` : ''}
     <a href="${link}" class="btn">Sign in now</a>
     <p style="font-size:12px;color:#9b9890">If you did not register for ${escHtml(APP_NAME)}, you can ignore this email.</p>
+  `));
+}
+
+// ── User rejection notification ───────────────────────────────────────────
+export async function sendAccountRejected(to, name, adminMessage = '') {
+  await send(to, `Your ${APP_NAME} account was not approved`, wrap('Account not approved', `
+    <p>Hi <strong>${escHtml(name)}</strong>,</p>
+    <p>An administrator reviewed your ${escHtml(APP_NAME)} account request and rejected it.</p>
+    ${adminMessage?.trim() ? `<div class="info"><p><strong>Admin message:</strong><br>${escHtml(adminMessage).replace(/\n/g, '<br>')}</p></div>` : ''}
+    <p style="font-size:12px;color:#9b9890">If you think this was a mistake, please contact the administrator who manages this account.</p>
   `));
 }
 

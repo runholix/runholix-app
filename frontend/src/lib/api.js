@@ -82,6 +82,8 @@ export const api = {
   deletePasskey:       (id, body) => request(`/auth/passkeys/${id}`, { method: 'DELETE', body: JSON.stringify(body) }),
   requestEmailChange: (body) => request('/auth/email',         { method: 'PUT',  body: JSON.stringify(body) }),
   confirmEmail:       (body) => request('/auth/confirm-email', { method: 'POST', body: JSON.stringify(body) }),
+  adminApprovalDetails: (token) => request(`/auth/admin-approve?token=${encodeURIComponent(token)}`),
+  adminApproval:      (body) => request('/auth/admin-approve', { method: 'POST', body: JSON.stringify(body) }),
 
   // ── iCal calendar feed ───────────────────────────────────────────────────
   getIcal:        ()     => request('/auth/ical'),
@@ -156,4 +158,3 @@ export const api = {
   deleteAvatar:  ()     => request('/upload/avatar', { method: 'DELETE' }),
   avatarUrl:     (userId) => `${BASE}/upload/avatar/${encodeURIComponent(userId)}`,
 };
-

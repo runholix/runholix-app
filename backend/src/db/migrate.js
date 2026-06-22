@@ -105,7 +105,30 @@ CREATE TABLE IF NOT EXISTS races (
   result_file_path TEXT, result_file_name TEXT,
 
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- Email reminder
+  registration_reminder_d1_sent_at TIMESTAMPTZ,
+  registration_reminder_t1h_sent_at TIMESTAMPTZ,
+  registration_reminder_d3_sent_at TIMESTAMPTZ,
+  race_day_reminder_sent_at TIMESTAMPTZ,
+  rpc_reminder_sent_at TIMESTAMPTZ,
+  rpc_end_reminder_sent_at TIMESTAMPTZ,
+  fill_rpc7_reminder_sent_at TIMESTAMPTZ,
+  fill_rpc3_reminder_sent_at TIMESTAMPTZ,
+  fill_results_reminder_sent_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS training_plans (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        plan_date DATE NOT NULL,
+        plan_time TEXT,
+        race_id UUID REFERENCES races(id) ON DELETE SET NULL,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS passkeys (
@@ -130,25 +153,9 @@ CREATE TABLE IF NOT EXISTS passkey_challenges (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_path TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_expires TIMESTAMPTZ;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_expires TIMESTAMPTZ;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_last_sent_at TIMESTAMPTZ;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_sent_count_24h INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_sent_window_start TIMESTAMPTZ;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_approval BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_token TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS ical_enabled BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS ical_token TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_token TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMPTZ;
-
-CREATE INDEX IF NOT EXISTS idx_races_user_id ON races(user_id);
+CREATE INDEX IF NOT EXISTS idx_training_user ON training_plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_training_date  ON training_plans(plan_date);
+CREATE INDEX IF NOT EXISTS idx_races_user_id  ON races(user_id);
 CREATE INDEX IF NOT EXISTS idx_races_race_date ON races(race_date DESC);
 CREATE INDEX IF NOT EXISTS idx_races_status ON races(status);
 CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
@@ -170,4 +177,4 @@ async function migrate() {
   }
 }
 
-migrate();
+export default migrate;

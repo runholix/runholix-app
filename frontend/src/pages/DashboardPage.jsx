@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { api } from '../lib/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { format, parseISO } from 'date-fns';
-import { fmtDist, fmtTime, paceStr } from "../lib/utils.js";
+import { fmtDist, fmtNum, fmtTime, paceStr } from "../lib/utils.js";
 
 function YearTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -124,7 +124,7 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-border)', gap: 8 }}>
                     <span style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>{pb.label}</span>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontWeight: 500 }}>{pb.record?.finish_time_seconds ? fmtTime(pb.record.finish_time_seconds) : '—'}</span>
+                      <span style={{ fontWeight: 500, color: pb.record?.finish_time_seconds ? 'var(--color-success)' : null }}>{pb.record?.finish_time_seconds ? fmtTime(pb.record.finish_time_seconds) : '—'}</span>
                       {paceStr(pb.record?.finish_time_seconds, pb.distKm) && (
                         <div style={{ fontSize: 11, color: 'var(--color-text-hint)', marginTop: 1 }}>{paceStr(pb.record.finish_time_seconds, pb.distKm)}</div>
                       )}
@@ -200,12 +200,15 @@ export default function DashboardPage() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.event_name}</div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                      {r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'} · {r.distance_label || (r.distance_km ? `${r.distance_km} km` : '')}
+                      {r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'} · {r.distance_label || (r.distance_km ? `${fmtNum(r.distance_km, { decimals: 1, suffix: 'km' })}` : '')}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
                     <div style={{ fontWeight: 500, color: 'var(--color-success)' }}>{fmtTime(r.finish_time_seconds)}</div>
-                    {r.overall_place && <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>#{r.overall_place}{r.overall_total ? `/${r.overall_total}` : ''}</div>}
+                    {paceStr(r.finish_time_seconds, r.distance_km) && (
+                      <div style={{ fontSize: 11, color: 'var(--color-text-hint)', marginTop: 1 }}>{paceStr(r.finish_time_seconds, r.distance_km)}</div>
+                    )}
+                    {r.overall_place && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 1 }}>#{r.overall_place}{r.overall_total ? `/${r.overall_total}` : ''}</div>}
                   </div>
                 </Link>
               ))}

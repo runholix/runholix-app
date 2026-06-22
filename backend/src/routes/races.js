@@ -86,8 +86,14 @@ router.get('/dashboard', async (req, res) => {
     const [upcomingRows, recentRows, yearlyRows] = await Promise.all([
       pool.query(
         `
-          SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime,
-                 r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end
+          SELECT
+            r.id,
+            r.event_name,
+            r.race_date::text AS race_date,
+            r.city,
+            r.location,
+            r.bib_number,
+            r.distance_label
           ${baseSql}
           AND r.status IN ('registered','upcoming')
           ORDER BY r.race_date ASC, r.created_at DESC
@@ -97,8 +103,15 @@ router.get('/dashboard', async (req, res) => {
       ),
       pool.query(
         `
-          SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime,
-                 r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end
+          SELECT
+            r.id,
+            r.event_name,
+            r.race_date::text AS race_date,
+            r.distance_label,
+            r.distance_km,
+            r.finish_time_seconds,
+            r.overall_place,
+            r.overall_total
           ${baseSql}
           AND r.status = 'completed'
           ORDER BY r.race_date DESC, r.created_at DESC
@@ -567,4 +580,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 export default router;
-

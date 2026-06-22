@@ -28,6 +28,8 @@ const ACTIVATION_RESEND_COOLDOWN_MS = 60 * 1000;
 const ACTIVATION_RESEND_WINDOW_MS = 24 * 60 * 60 * 1000;
 const EMAIL_CHANGE_COOLDOWN_MS = 60 * 1000;
 const EMAIL_CHANGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const LOGIN_FAILURE_LIMIT = 5;
+const LOGIN_FAILURE_WINDOW_MS = 60 * 1000;
 const authAttempts = new Map();
 
 function setAuthCookie(res, token) {
@@ -496,15 +498,40 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   const normalizedEmail = email.toLowerCase().trim();
-  if (!authRateLimit(req, res, `login:${normalizedEmail}`, 8)) return;
+  const loginKey = `${req.ip}:login:${normalizedEmail}`;
+  const now = Date.now();
+  const bucket = authAttempts.get(loginKey) || { count: 0, resetAt: now + LOGIN_FAILURE_WINDOW_MS };
+  if (bucket.resetAt <= now) {
+    bucket.count = 0;
+    bucket.resetAt = now + LOGIN_FAILURE_WINDOW_MS;
+  }
+  if (bucket.count >= LOGIN_FAILURE_LIMIT) {
+    authAttempts.set(loginKey, bucket);
+    return res.status(429).json({ error: 'Too many requests.' });
+  }
   try {
     const { rows } = await pool.query(
       'SELECT * FROM users WHERE email = $1',
       [normalizedEmail]
     );
-    if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!rows.length) {
+      bucket.count += 1;
+      authAttempts.set(loginKey, bucket);
+      if (bucket.count >= LOGIN_FAILURE_LIMIT) {
+        return res.status(429).json({ error: 'Too many requests.' });
+      }
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     const ok = await bcrypt.compare(password, rows[0].password_hash);
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!ok) {
+      bucket.count += 1;
+      authAttempts.set(loginKey, bucket);
+      if (bucket.count >= LOGIN_FAILURE_LIMIT) {
+        return res.status(429).json({ error: 'Too many requests.' });
+      }
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    authAttempts.delete(loginKey);
     if (!rows[0].is_active) {
       return res.status(403).json({
         error: 'Account not activated. Please check your email.',

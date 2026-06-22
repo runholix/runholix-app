@@ -16,6 +16,7 @@
   --color-primary-bg: #eff6ff;
   --color-success: #15803d;
   --color-success-bg: #f0fdf4;
+  --color-success-border: #4ade80;
   --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
   --color-danger: #dc2626;
@@ -23,6 +24,7 @@
   --color-danger-border: #fca5a5;
   --color-info-bg: #f0f9ff;
   --color-info: #0369a1;
+  --color-info-border: #60b0f8;
   --color-purple: #7c3aed;
   --color-purple-bg: #faf5ff;
   --color-input-bg: #ffffff;
@@ -46,6 +48,7 @@
   --color-primary-bg: #1a2540;
   --color-success: #4ade80;
   --color-success-bg: #052e16;
+  --color-success-border: #15803d;
   --color-warning: #fbbf24;
   --color-warning-bg: #2a1c05;
   --color-danger: #f87171;
@@ -53,6 +56,7 @@
   --color-danger-border: #7f1d1d;
   --color-info-bg: #0c1e30;
   --color-info: #60b0f8;
+  --color-info-border: #0369a1;
   --color-purple: #c084fc;
   --color-purple-bg: #1e0f35;
   --color-input-bg: #16161a;
@@ -347,6 +351,7 @@ tbody tr:hover td { background: var(--color-bg); }
 .alert-info {
   background: var(--color-info-bg);
   color: var(--color-info);
+  border: 1px solid var(--color-info-border);
   padding: 10px 14px;
   border-radius: var(--radius);
   font-size: 13px;
@@ -356,6 +361,7 @@ tbody tr:hover td { background: var(--color-bg); }
 .alert-success {
   background: var(--color-success-bg);
   color: var(--color-success);
+  border: 1px solid var(--color-success-border);
   padding: 10px 14px;
   border-radius: var(--radius);
   font-size: 13px;

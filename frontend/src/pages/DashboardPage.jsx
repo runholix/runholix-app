@@ -79,7 +79,7 @@ export default function DashboardPage() {
               { label: 'Races completed', value: stats?.total_completed || 0, icon: 'ti-trophy', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
               { label: 'Upcoming', value: stats?.upcoming_count || 0, icon: 'ti-calendar-event', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
               { label: 'Total distance', value: fmtDist(stats?.total_distance_km), icon: 'ti-route', color: 'var(--color-primary)', bg: 'var(--color-primary-bg)' },
-              { label: 'Total elevation', value: stats?.total_elevation_m > 0 ? `${Number(stats.total_elevation_m).toLocaleString("en-US")} m` : '—', icon: 'ti-mountain', color: '#7c3aed', bg: '#faf5ff' },
+              { label: 'Total elevation', value: stats?.total_elevation_m > 0 ? `${Number(stats.total_elevation_m).toLocaleString("en-US")} m` : '—', icon: 'ti-mountain', color: 'var(--color-purple)', bg: 'var(--color-purple-bg)' },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>

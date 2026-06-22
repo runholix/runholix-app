@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../../lib/api.js";
+import RequiredMarker from "../../components/RequiredMarker.jsx";
 
 export default function TrainingModal({ plan, races, defaultDate, onSave, onClose }) {
     const [form, setForm] = useState({
@@ -56,12 +57,12 @@ export default function TrainingModal({ plan, races, defaultDate, onSave, onClos
                 {error && <div className="alert-error">{error}</div>}
                 <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <div className="form-group">
-                        <label className="form-label">Name *</label>
+                        <label className="form-label">Name <RequiredMarker /></label>
                         <input value={form.name} onChange={set('name')} placeholder="e.g. Long run 30 km" required />
                     </div>
                     <div className="grid-form-2">
                         <div className="form-group">
-                            <label className="form-label">Date *</label>
+                            <label className="form-label">Date <RequiredMarker /></label>
                             <input type="date" value={form.plan_date} onChange={set('plan_date')} required />
                         </div>
                         <div className="form-group">

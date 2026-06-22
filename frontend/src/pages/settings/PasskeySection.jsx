@@ -3,6 +3,7 @@ import { startRegistration } from "@simplewebauthn/browser";
 import { api } from "../../lib/api.js";
 import { Section } from "./SettingsPage.jsx";
 import Alert from "../../components/Alert.jsx";
+import RequiredMarker from "../../components/RequiredMarker.jsx";
 
 function fmtDate(value) {
     if (!value) return "Never";
@@ -96,11 +97,11 @@ export default function PasskeySection() {
 
                     <form onSubmit={addPasskey} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                         <div className="form-group" style={{ flex: "1 1 220px", marginBottom: 0 }}>
-                            <label className="form-label">Passkey name *</label>
+                            <label className="form-label">Passkey name <RequiredMarker /></label>
                             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Work laptop" maxLength={60} disabled={!supported || passkeys.length >= 3} required />
                         </div>
                         <div className="form-group" style={{ flex: "1 1 220px", marginBottom: 0 }}>
-                            <label className="form-label">Current password *</label>
+                            <label className="form-label">Current password <RequiredMarker /></label>
                             <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Required for passkey changes" disabled={!supported} autoComplete="current-password" required />
                         </div>
                         <button type="submit" className="btn btn-primary btn-sm" disabled={!supported || saving || passkeys.length >= 3}>

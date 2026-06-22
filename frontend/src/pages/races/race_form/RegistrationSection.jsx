@@ -28,11 +28,11 @@ export default function RegistrationSection({ isTrail, makeOnClear, set, setVal,
             </div>
 
             <div className="grid-form-3" style={{ marginBottom:14 }}>
-                <Field label="Registered email *">
-                    <input type="email" value={form.registered_email} onChange={set('registered_email')} placeholder="you@example.com" required />
+                <Field label="Registered email">
+                    <input type="email" value={form.registered_email} onChange={set('registered_email')} placeholder="you@example.com" />
                 </Field>
-                <Field label="Registered phone *">
-                    <input type="tel" value={form.registered_phone} onChange={set('registered_phone')} placeholder="+62812345678" required />
+                <Field label="Registered phone">
+                    <input type="tel" value={form.registered_phone} onChange={set('registered_phone')} placeholder="+62812345678" />
                 </Field>
                 <Field label="Finish time target" hint="HH:MM:SS or MM:SS">
                     <input value={form.finish_time_target} onChange={set('finish_time_target')} placeholder="04:30:00"

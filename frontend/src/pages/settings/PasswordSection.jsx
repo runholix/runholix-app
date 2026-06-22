@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../../lib/api.js";
 import { Section } from "./SettingsPage.jsx";
 import Alert from "../../components/Alert.jsx";
+import RequiredMarker from "../../components/RequiredMarker.jsx";
 
 export default function PasswordSection() {
     const [form, setForm] = useState({ current: '', next: '', confirm: '' });
@@ -44,12 +45,12 @@ export default function PasswordSection() {
         <Section title="Password" description="Use a strong, unique password. You'll receive an email notification when it changes.">
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="form-group">
-                    <label className="form-label">Current password *</label>
+                    <label className="form-label">Current password <RequiredMarker /></label>
                     <input type="password" value={form.current} onChange={set('current')} placeholder="••••••••" required />
                 </div>
                 <div className="grid-form-2">
                     <div className="form-group">
-                        <label className="form-label">New password *</label>
+                        <label className="form-label">New password <RequiredMarker /></label>
                         <input type="password" value={form.next} onChange={set('next')} placeholder="Min 8 characters" required minLength={8} />
                         {strength && (
                             <div style={{ marginTop: 6 }}>
@@ -61,7 +62,7 @@ export default function PasswordSection() {
                         )}
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Confirm new password *</label>
+                        <label className="form-label">Confirm new password <RequiredMarker /></label>
                         <input type="password" value={form.confirm} onChange={set('confirm')} placeholder="Repeat new password" required />
                         {form.confirm && form.next !== form.confirm && (
                             <div style={{ fontSize: 11, color: 'var(--color-danger)', marginTop: 3 }}>Passwords do not match</div>

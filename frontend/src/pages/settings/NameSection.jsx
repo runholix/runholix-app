@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../../lib/api.js";
 import { Section } from "./SettingsPage.jsx";
 import Alert from "../../components/Alert.jsx";
+import RequiredMarker from "../../components/RequiredMarker.jsx";
 
 export default function NameSection({ user, onUpdate }) {
     const [name, setName]     = useState(user?.name || '');
@@ -24,7 +25,7 @@ export default function NameSection({ user, onUpdate }) {
         <Section title="Display name" description="Your name shown across the app.">
             <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div className="form-group" style={{ flex: '1 1 220px' }}>
-                    <label className="form-label">Full name *</label>
+                    <label className="form-label">Full name <RequiredMarker /></label>
                     <input value={name} onChange={e => setName(e.target.value)} required />
                 </div>
                 <button type="submit" className="btn btn-primary btn-sm" disabled={saving || !name.trim() || name.trim() === user?.name}>

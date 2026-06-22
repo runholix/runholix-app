@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { Section } from './SettingsPage.jsx';
 import Alert from '../../components/Alert.jsx';
+import RequiredMarker from "../../components/RequiredMarker.jsx";
 
 const STORAGE_PREFIX = 'rt_email_change_';
 
@@ -94,11 +95,11 @@ export default function EmailSection({ user }) {
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="grid-form-2">
             <div className="form-group">
-              <label className="form-label">New email address *</label>
+              <label className="form-label">New email address <RequiredMarker /></label>
               <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new@example.com" required />
             </div>
             <div className="form-group">
-              <label className="form-label">Current password (to confirm) *</label>
+              <label className="form-label">Current password (to confirm) <RequiredMarker /></label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import ThemeToggle from '../../components/ThemeToggle.jsx';
+import RequiredMarker from "../../components/RequiredMarker.jsx";
 
 const STORAGE_PREFIX = 'rt_activation_resend_';
 
@@ -22,7 +23,7 @@ function writeResendState(email, value) {
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   // When email is enabled, backend returns requiresActivation instead of a token
@@ -58,6 +59,10 @@ export default function RegisterPage() {
   const submit = async (e) => {
     e.preventDefault();
     setError(''); setLoading(true);
+    if (form.password !== form.confirmPassword) {
+      setLoading(false);
+      return setError("Passwords do not match.")
+    }
     try {
       const data = await api.register({ name: form.name, email: form.email, password: form.password });
       if (data.requiresActivation) {
@@ -159,19 +164,24 @@ export default function RegisterPage() {
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group">
-            <label className="form-label">Full name</label>
+            <label className="form-label">Full name <RequiredMarker /></label>
             <input placeholder="Your name" value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
           </div>
           <div className="form-group">
-            <label className="form-label">Email</label>
+            <label className="form-label">Email <RequiredMarker /></label>
             <input type="email" placeholder="you@example.com" value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
           </div>
           <div className="form-group">
-            <label className="form-label">Password</label>
+            <label className="form-label">Password <RequiredMarker /></label>
             <input type="password" placeholder="Min 8 characters" value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))} minLength={8} required />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Confirm Password <RequiredMarker /></label>
+            <input type="password" placeholder="Repeat password" value={form.confirmPassword}
+                   onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} required />
           </div>
           <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center', marginTop: 4 }} disabled={loading}>
             {loading ? 'Creating account…' : 'Create account'}

@@ -1,6 +1,7 @@
 import Field from "../../../components/Field.jsx";
 import RouteUploader from "../../../components/RouteUploader.jsx";
 import TimezoneSelect from "../../../components/TimezoneSelect.jsx";
+import RequiredMarker from "../../../components/RequiredMarker.jsx";
 
 export default function EventInfoSection({ isTrail, setVal, trackUpload, makeOnClear, set, form, userId, raceDateExists }) {
     return (
@@ -8,12 +9,12 @@ export default function EventInfoSection({ isTrail, setVal, trackUpload, makeOnC
             <div className="form-section-title" style={{ marginTop:0 }}>Event info</div>
 
             <div className="form-group" style={{ marginBottom:14 }}>
-                <label className="form-label">Event name *</label>
+                <label className="form-label">Event name <RequiredMarker /></label>
                 <input value={form.event_name} onChange={set('event_name')} placeholder="e.g. Jakarta Marathon 2024" required />
             </div>
 
             <div className="grid-form-2" style={{ marginBottom:14 }}>
-                <Field label="Race date *">
+                <Field label="Race date" required>
                     <input type="date" value={form.race_date} onChange={set('race_date')} required />
                     {raceDateExists && (
                         <span style={{ fontSize: 11, color: 'var(--color-danger)', marginTop: 2 }}>

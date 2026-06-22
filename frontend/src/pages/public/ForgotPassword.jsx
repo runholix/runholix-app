@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import ThemeToggle from '../../components/ThemeToggle.jsx';
+import RequiredMarker from "../../components/RequiredMarker.jsx";
 
 const STORAGE_PREFIX = 'rt_forgot_password_';
 
@@ -121,7 +122,7 @@ export default function ForgotPassword() {
         {!isResetMode ? (
           <form onSubmit={requestReset} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="form-group">
-              <label className="form-label">Email *</label>
+              <label className="form-label">Email <RequiredMarker /></label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
             </div>
             <button type="submit" className="btn btn-primary" disabled={loading || resendBlocked} style={{ justifyContent: 'center' }}>
@@ -131,11 +132,11 @@ export default function ForgotPassword() {
         ) : (
           <form onSubmit={submitNewPassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="form-group">
-              <label className="form-label">New password *</label>
+              <label className="form-label">New password <RequiredMarker /></label>
               <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={8} />
             </div>
             <div className="form-group">
-              <label className="form-label">Confirm new password *</label>
+              <label className="form-label">Confirm new password <RequiredMarker /></label>
               <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={8} />
             </div>
             <button type="submit" className="btn btn-primary" disabled={loading} style={{ justifyContent: 'center' }}>

@@ -36,70 +36,76 @@ export function eventIcon(type) {
 // ── Build event list from races + training ────────────────────────────────
 function buildEvents(races, training) {
   const events = [];
-  races.forEach(r => {
-    if (r.race_date) {
-      events.push({
-        type: 'race',
-        date: r.race_date.slice(0, 10),
-        label: r.event_name,
-        id: r.id,
-        time: r.flag_off_time || '',
-        race: r,
-      });
-    }
-    if (r.status === 'upcoming' && r.registration_datetime) {
-      const registrationDateTime = String(r.registration_datetime).replace(' ', 'T');
-      events.push({
-        type: 'registration',
-        date: registrationDateTime.slice(0, 10),
-        label: `Registration: ${r.event_name}`,
-        id: r.id,
-        time: registrationDateTime.slice(11, 16),
-        race: r,
-      });
-    }
-    if (r.rpc_date_start) {
-      const label = `RPC: ${r.event_name}`;
-      const startDs = r.rpc_date_start.slice(0, 10);
-      const endDs   = r.rpc_date_end ? r.rpc_date_end.slice(0, 10) : startDs;
-
-      // Generate one event for every day in the RPC window
-      const rangeDays = eachDayOfInterval({
-        start: parseISO(startDs),
-        end:   parseISO(endDs),
-      });
-
-      rangeDays.forEach((day, idx) => {
-        const ds = format(day, 'yyyy-MM-dd');
-        const isFirst = idx === 0;
-        const isLast  = idx === rangeDays.length - 1;
-        const dayLabel = rangeDays.length === 1
-          ? label
-          : isFirst ? `${label} (start)`
-          : isLast  ? `${label} (end)`
-          : label;
-
+  if (races && races?.length > 0) {
+    races.forEach(r => {
+      if (r.race_date) {
         events.push({
-          type: 'rpc',
-          date: ds,
-          label: dayLabel,
+          type: 'race',
+          date: r.race_date.slice(0, 10),
+          label: r.event_name,
           id: r.id,
-          time: r.rpc_time || '',
+          time: r.flag_off_time || '',
           race: r,
         });
-      });
-    }
-  });
-  training.forEach(t => {
-    events.push({
-      type: 'training',
-      date: t.plan_date.slice(0, 10),
-      label: t.name,
-      id: t.id,
-      time: t.plan_time || '',
-      plan: t,
+      }
+      if (r.status === 'upcoming' && r.registration_datetime) {
+        const registrationDateTime = String(r.registration_datetime).replace(' ', 'T');
+        events.push({
+          type: 'registration',
+          date: registrationDateTime.slice(0, 10),
+          label: `Registration: ${r.event_name}`,
+          id: r.id,
+          time: registrationDateTime.slice(11, 16),
+          race: r,
+        });
+      }
+      if (r.rpc_date_start) {
+        const label = `RPC: ${r.event_name}`;
+        const startDs = r.rpc_date_start.slice(0, 10);
+        const endDs   = r.rpc_date_end ? r.rpc_date_end.slice(0, 10) : startDs;
+
+        // Generate one event for every day in the RPC window
+        const rangeDays = eachDayOfInterval({
+          start: parseISO(startDs),
+          end:   parseISO(endDs),
+        });
+
+        rangeDays.forEach((day, idx) => {
+          const ds = format(day, 'yyyy-MM-dd');
+          const isFirst = idx === 0;
+          const isLast  = idx === rangeDays.length - 1;
+          const dayLabel = rangeDays.length === 1
+              ? label
+              : isFirst ? `${label} (start)`
+                  : isLast  ? `${label} (end)`
+                      : label;
+
+          events.push({
+            type: 'rpc',
+            date: ds,
+            label: dayLabel,
+            id: r.id,
+            time: r.rpc_time || '',
+            race: r,
+          });
+        });
+      }
     });
-  });
+  }
+
+  if (training && training.length > 0) {
+    training.forEach(t => {
+      events.push({
+        type: 'training',
+        date: t.plan_date.slice(0, 10),
+        label: t.name,
+        id: t.id,
+        time: t.plan_time || '',
+        plan: t,
+      });
+    });
+  }
+
   return events;
 }
 

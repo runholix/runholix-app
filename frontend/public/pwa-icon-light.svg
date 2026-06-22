@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Runholix</title>
+  <rect width="512" height="512" rx="96" fill="#2f6fed"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="34">
+    <path d="M170 156h58c38 0 62 20 62 50 0 26-17 45-43 51l41 74" />
+    <path d="M252 281l47 40" />
+    <path d="M206 288l-31 78" />
+    <path d="M302 214l52 24" />
+    <path d="M248 178l42 22" />
+    <path d="M165 388l72-22" />
+    <circle cx="292" cy="154" r="24" fill="#fff" stroke="none" />
+  </g>
+</svg>

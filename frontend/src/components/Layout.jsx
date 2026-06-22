@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import APP_NAME from '../lib/appName.js';
+import { APP_VERSION } from '../lib/version.js';
 import ThemeToggle from './ThemeToggle.jsx';
 import { api } from '../lib/api.js';
 
@@ -51,7 +52,7 @@ function SidebarContent({ user, onLogout, onClose, avatarTs }) {
               width: 32, height: 32, borderRadius: 8,
               background: 'var(--color-primary)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: 16, flexShrink: 0,
+              color: 'white', fontSize: 20, flexShrink: 0,
             }}>
               <i className="ti ti-run" />
             </div>
@@ -124,6 +125,9 @@ function SidebarContent({ user, onLogout, onClose, avatarTs }) {
         <button onClick={onLogout} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}>
           <i className="ti ti-logout" style={{ fontSize: 14 }} /> Sign out
         </button>
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--color-text-hint)', textAlign: 'center' }}>
+          v{APP_VERSION}
+        </div>
       </div>
     </>
   );
@@ -166,7 +170,7 @@ export default function Layout() {
               width: 28, height: 28, borderRadius: 6,
               background: 'var(--color-primary)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: 14,
+              color: 'white', fontSize: 17,
             }}>
               <i className="ti ti-run" />
             </div>

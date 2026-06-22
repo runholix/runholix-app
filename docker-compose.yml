@@ -3,10 +3,8 @@ services:
     image: postgres:16-alpine
     container_name: runholix-db
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-runholix}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: ${POSTGRES_DB:-runholix}
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,22 +23,10 @@ services:
       db:
         condition: service_healthy
     environment:
-      APP_NAME: ${APP_NAME:-Runholix}
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-runholix}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-runholix}
-      JWT_SECRET: ${JWT_SECRET:-supersecretchangeme}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}/${POSTGRES_DB}
       PORT: 3001
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       UPLOAD_DIR: /uploads
-      # App public URL (used in email links)
-      APP_URL: ${APP_URL:-http://localhost}
-      # SMTP — leave blank to disable email
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-tls}   # plain | tls | ssl
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-noreply@example.com}
     expose:
       - "3001"
     volumes:

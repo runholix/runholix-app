@@ -21,7 +21,8 @@ export default function PasskeySection() {
     const load = async () => {
         setLoading(true);
         try {
-            setPasskeys(await api.getPasskeys());
+            const data = await api.getPasskeys();
+            setPasskeys(Array.isArray(data) ? data : []);
         } catch (err) {
             setResult({ type: "error", message: err.message });
         } finally {
@@ -40,7 +41,10 @@ export default function PasskeySection() {
             const options = await api.passkeyRegisterOptions({ current_password: currentPassword });
             const credential = await startRegistration({ optionsJSON: options });
             const created = await api.verifyPasskeyRegister({ credential, name: name.trim() || "Passkey" });
-            setPasskeys(keys => [created, ...keys]);
+            setPasskeys(keys => {
+                const current = Array.isArray(keys) ? keys : [];
+                return [created, ...current];
+            });
             setName("");
             setCurrentPassword("");
             setResult({ type: "success", message: "Passkey added. A confirmation email has been sent." });

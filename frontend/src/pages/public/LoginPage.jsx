@@ -34,15 +34,13 @@ export default function LoginPage() {
   };
 
   const loginWithPasskey = async () => {
-    const email = form.email.trim();
-    if (!email) return setError('Enter your email first.');
     if (!window.PublicKeyCredential) return setError('This browser does not support passkeys.');
     setError('');
     setPasskeyLoading(true);
     try {
-      const options = await api.passkeyLoginOptions({ email });
+      const options = await api.passkeyLoginOptions();
       const credential = await startAuthentication({ optionsJSON: options });
-      const data = await api.verifyPasskeyLogin({ email, credential });
+      const data = await api.verifyPasskeyLogin({ credential });
       loginWithToken(data);
       navigate(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/', { replace: true });
     } catch (err) {

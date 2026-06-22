@@ -11,6 +11,7 @@ import {
 import { isoBase64URL, isoUint8Array } from '@simplewebauthn/server/helpers';
 import pool from '../db/pool.js';
 import { emailEnabled, sendActivationEmail, sendWelcomeEmail, sendPasswordChangedEmail, sendPasswordResetEmail, sendEmailChangeConfirmation, sendAdminApprovalRequest, sendAccountApproved, sendAccountRejected, sendPasskeyAddedEmail, sendPasskeyRemovedEmail } from '../email.js';
+import { buildAuthCookie } from '../utils/authCookies.js';
 
 const router = Router();
 
@@ -28,6 +29,19 @@ const ACTIVATION_RESEND_WINDOW_MS = 24 * 60 * 60 * 1000;
 const EMAIL_CHANGE_COOLDOWN_MS = 60 * 1000;
 const EMAIL_CHANGE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const authAttempts = new Map();
+
+function setAuthCookie(res, token) {
+  const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true';
+  const sameSite = process.env.COOKIE_SAMESITE || 'lax';
+  res.setHeader('Set-Cookie', buildAuthCookie(token, { secure, sameSite }));
+}
+
+function clearAuthCookie(res) {
+  const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true';
+  const sameSite = process.env.COOKIE_SAMESITE || 'lax';
+  const cookie = buildAuthCookie('', { secure, sameSite });
+  res.setHeader('Set-Cookie', `${cookie}; Max-Age=0`);
+}
 
 function authRateLimit(req, res, key, max = 10, windowMs = 10 * 60 * 1000) {
   const now = Date.now();
@@ -172,6 +186,7 @@ router.post('/register', async (req, res) => {
         [email.toLowerCase().trim(), hash, name.trim()]
       );
       const token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+      setAuthCookie(res, token);
       return res.status(201).json({ token, user: rows[0] });
     }
   } catch (err) {
@@ -225,6 +240,7 @@ router.post('/activate', async (req, res) => {
       }
       sendWelcomeEmail(rows[0].email, rows[0].name).catch(() => {});
       const jwt_token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+      setAuthCookie(res, jwt_token);
       res.json({ token: jwt_token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name, timezone: rows[0].timezone } });
     }
   } catch (err) {
@@ -496,6 +512,7 @@ router.post('/login', async (req, res) => {
       });
     }
     const token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    setAuthCookie(res, token);
     res.json({ token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name, avatar_path: rows[0].avatar_path, timezone: rows[0].timezone } });
   } catch (err) {
     console.error(err);
@@ -503,31 +520,20 @@ router.post('/login', async (req, res) => {
   }
 });
 
+router.post('/logout', async (_req, res) => {
+  clearAuthCookie(res);
+  res.json({ ok: true });
+});
+
 router.post('/passkeys/login/options', async (req, res) => {
-  const email = String(req.body.email || '').toLowerCase().trim();
-  if (!email) return res.status(400).json({ error: 'Email required' });
-  if (!authRateLimit(req, res, `passkey-options:${email}`, 12)) return;
+  if (!authRateLimit(req, res, 'passkey-options', 12)) return;
   try {
-    const { rows } = await pool.query(
-      `SELECT u.id
-       FROM users u
-       JOIN passkeys p ON p.user_id = u.id
-       WHERE u.email=$1 AND u.is_active=TRUE
-       GROUP BY u.id`,
-      [email]
-    );
-    const { rows: passkeys } = rows.length
-      ? await pool.query(
-        'SELECT credential_id, transports FROM passkeys WHERE user_id=$1',
-        [rows[0].id]
-      )
-      : { rows: [] };
     const options = await generateAuthenticationOptions({
       rpID: RP_ID,
-      allowCredentials: passkeys.map(p => ({ id: p.credential_id, transports: p.transports || [] })),
+      allowCredentials: [],
       userVerification: 'required',
     });
-    await saveChallenge({ email, challenge: options.challenge, type: 'authentication' });
+    await saveChallenge({ challenge: options.challenge, type: 'authentication' });
     res.json(options);
   } catch (err) {
     console.error(err);
@@ -536,22 +542,21 @@ router.post('/passkeys/login/options', async (req, res) => {
 });
 
 router.post('/passkeys/login/verify', async (req, res) => {
-  const email = String(req.body.email || '').toLowerCase().trim();
   const credential = req.body.credential;
-  if (!email || !credential) return res.status(400).json({ error: 'Email and credential required' });
-  if (!authRateLimit(req, res, `passkey-verify:${email}`, 8)) return;
+  if (!credential) return res.status(400).json({ error: 'Credential required' });
+  if (!authRateLimit(req, res, 'passkey-verify', 8)) return;
   try {
     const clientData = JSON.parse(Buffer.from(credential.response.clientDataJSON, 'base64url').toString('utf8'));
     const { rows } = await pool.query(
       `SELECT p.*, u.id AS user_id, u.email, u.name, u.avatar_path, u.is_active
        FROM passkeys p
        JOIN users u ON u.id = p.user_id
-       WHERE u.email=$1 AND p.credential_id=$2`,
-      [email, credential.id]
+       WHERE p.credential_id=$1`,
+      [credential.id]
     );
     if (!rows.length || !rows[0].is_active) return res.status(401).json({ error: 'Invalid passkey' });
     const passkey = rows[0];
-    const expectedChallenge = await consumeChallenge({ email, challenge: clientData.challenge, type: 'authentication' });
+    const expectedChallenge = await consumeChallenge({ challenge: clientData.challenge, type: 'authentication' });
     if (!expectedChallenge) return res.status(400).json({ error: 'Invalid or expired passkey challenge' });
 
     const verification = await verifyAuthenticationResponse({
@@ -574,7 +579,9 @@ router.post('/passkeys/login/verify', async (req, res) => {
       [verification.authenticationInfo.newCounter, passkey.id]
     );
     const user = publicUser(passkey);
-    res.json({ token: signUser(user), user });
+    const token = signUser(user);
+    setAuthCookie(res, token);
+    res.json({ token, user });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -583,10 +590,12 @@ router.post('/passkeys/login/verify', async (req, res) => {
 
 // ── ME ────────────────────────────────────────────────────────────────────
 router.get('/me', async (req, res) => {
-  const header = req.headers.authorization;
-  if (!header) return res.status(401).json({ error: 'Unauthorized' });
+  const token = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.slice(7)
+    : req.headers.cookie?.match(/(?:^|;\s*)rt_token=([^;]+)/)?.[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET);
+    const payload = jwt.verify(decodeURIComponent(token), process.env.JWT_SECRET);
     const { rows } = await pool.query(
     'SELECT id, email, name, avatar_path, timezone FROM users WHERE id = $1 AND is_active = TRUE',
       [payload.userId]
@@ -874,6 +883,7 @@ router.post('/confirm-email', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired confirmation link.' });
     // Return fresh JWT with updated email
     const jwt_token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    setAuthCookie(res, jwt_token);
     res.json({ token: jwt_token, user: { id: rows[0].id, email: rows[0].email, name: rows[0].name, timezone: rows[0].timezone } });
   } catch (err) {
     console.error(err);

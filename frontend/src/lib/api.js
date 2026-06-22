@@ -1,7 +1,76 @@
 const BASE = import.meta.env.VITE_API_URL || '/api';
 const RACE_DATE_LIST_KEY = 'rt_race_date_list';
+const CSRF_TOKEN_KEY = 'rt_csrf_token';
+const CSRF_TOKEN_TS_KEY = 'rt_csrf_token_ts';
+const CSRF_TOKEN_TTL_MS = 30 * 60 * 1000;
+const CSRF_PUBLIC_PREFIXES = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/activate',
+  '/auth/resend-activation',
+  '/auth/forgot-password',
+  '/auth/forgot-password/confirm',
+  '/auth/admin-approve',
+  '/auth/passkeys/login/options',
+  '/auth/passkeys/login/verify',
+];
+let csrfTokenPromise = null;
 
 function getToken() { return localStorage.getItem('rt_token'); }
+
+function getStoredCsrfToken() {
+  const token = sessionStorage.getItem(CSRF_TOKEN_KEY);
+  const ts = Number(sessionStorage.getItem(CSRF_TOKEN_TS_KEY) || 0);
+  if (!token || !ts) return null;
+  if (Date.now() - ts > CSRF_TOKEN_TTL_MS) {
+    sessionStorage.removeItem(CSRF_TOKEN_KEY);
+    sessionStorage.removeItem(CSRF_TOKEN_TS_KEY);
+    return null;
+  }
+  return token;
+}
+
+function storeCsrfToken(token) {
+  sessionStorage.setItem(CSRF_TOKEN_KEY, token);
+  sessionStorage.setItem(CSRF_TOKEN_TS_KEY, String(Date.now()));
+}
+
+async function fetchCsrfToken() {
+  const token = getToken();
+  const res = await fetch(`${BASE}/auth/csrf`, {
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.csrfToken) {
+    throw new Error(data.error || 'Failed to load CSRF token');
+  }
+  storeCsrfToken(data.csrfToken);
+  return data.csrfToken;
+}
+
+async function getCsrfToken() {
+  const cached = getStoredCsrfToken();
+  if (cached) return cached;
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = fetchCsrfToken().finally(() => {
+      csrfTokenPromise = null;
+    });
+  }
+  return csrfTokenPromise;
+}
+
+function requiresCsrf(options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+}
+
+function isCsrfExemptPath(path) {
+  return CSRF_PUBLIC_PREFIXES.some(prefix => path.startsWith(prefix));
+}
 
 function storeRaceDateList(data) {
   const races = Array.isArray(data) ? data : [];
@@ -11,13 +80,21 @@ function storeRaceDateList(data) {
 
 async function request(path, options = {}) {
   const token = getToken();
+  const headers = {
+    Accept: 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (requiresCsrf(options) && !isCsrfExemptPath(path)) {
+    headers['x-csrf-token'] = await getCsrfToken();
+  }
   const res = await fetch(`${BASE}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
+    credentials: 'include',
+    headers,
   });
 
   let data;
@@ -40,9 +117,16 @@ async function uploadFile(endpoint, file) {
   const token = getToken();
   const fd = new FormData();
   fd.append('file', file);
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  if (!isCsrfExemptPath(endpoint)) {
+    headers['x-csrf-token'] = await getCsrfToken();
+  }
   const res = await fetch(`${BASE}${endpoint}`, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+    headers,
     body: fd,
   });
 
@@ -68,9 +152,10 @@ export const api = {
   activate:         (body) => request('/auth/activate',          { method: 'POST', body: JSON.stringify(body) }),
   resendActivation: (body) => request('/auth/resend-activation', { method: 'POST', body: JSON.stringify(body) }),
   login:            (body) => request('/auth/login',             { method: 'POST', body: JSON.stringify(body) }),
+  logout:           ()     => request('/auth/logout',            { method: 'POST' }),
   requestPasswordReset: (body) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify(body) }),
   confirmPasswordReset: (body) => request('/auth/forgot-password/confirm', { method: 'POST', body: JSON.stringify(body) }),
-  passkeyLoginOptions: (body) => request('/auth/passkeys/login/options', { method: 'POST', body: JSON.stringify(body) }),
+  passkeyLoginOptions: (body) => request('/auth/passkeys/login/options', body ? { method: 'POST', body: JSON.stringify(body) } : { method: 'POST' }),
   verifyPasskeyLogin:  (body) => request('/auth/passkeys/login/verify',  { method: 'POST', body: JSON.stringify(body) }),
   me:               ()     => request('/auth/me'),
   updateName:         (body) => request('/auth/name',          { method: 'PUT',  body: JSON.stringify(body) }),

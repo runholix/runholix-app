@@ -10,11 +10,11 @@ export function AuthProvider({ children }) {
   const [avatarTs, setAvatarTs] = useState(() => Date.now());
 
   useEffect(() => {
-    const token = localStorage.getItem('rt_token');
-    if (!token) { setLoading(false); return; }
     api.me()
       .then(u => setUser(u))
-      .catch(() => localStorage.removeItem('rt_token'))
+      .catch(() => {
+        localStorage.removeItem('rt_token');
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -36,8 +36,12 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('rt_token');
-    setUser(null);
+    api.logout().catch(() => {}).finally(() => {
+      localStorage.removeItem('rt_token');
+      sessionStorage.removeItem('rt_csrf_token');
+      sessionStorage.removeItem('rt_csrf_token_ts');
+      setUser(null);
+    });
   };
 
   // Called by SettingsPage after profile updates

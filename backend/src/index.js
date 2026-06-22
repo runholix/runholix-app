@@ -9,14 +9,60 @@ import trainingRoutes from './routes/training.js';
 import icalRoutes from './routes/ical.js';
 import { startScheduler } from './scheduler.js';
 import migrate from "./db/migrate.js";
+import { getAuthToken, signCsrfToken, verifyCsrfToken } from './utils/authCookies.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const corsOrigin = (process.env.CORS_ORIGIN || '').trim();
+const CSRF_SECRET = process.env.CSRF_SECRET || process.env.JWT_SECRET || 'change-me';
+const csrfAllowedPublicPrefixes = [
+  '/api/health',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/activate',
+  '/api/auth/resend-activation',
+  '/api/auth/forgot-password',
+  '/api/auth/forgot-password/confirm',
+  '/api/auth/admin-approve',
+  '/api/auth/passkeys/login/options',
+  '/api/auth/passkeys/login/verify',
+  '/api/auth/passkeys/register/options',
+  '/api/auth/passkeys/register/verify',
+];
 
-app.use(cors());
+const corsOptions = corsOrigin
+  ? {
+      origin: corsOrigin.includes(',')
+        ? corsOrigin.split(',').map(origin => origin.trim()).filter(Boolean)
+        : corsOrigin,
+      credentials: true,
+    }
+  : { credentials: true };
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+app.get('/api/auth/csrf', (req, res) => {
+  const authToken = getAuthToken(req);
+  if (!authToken) return res.status(401).json({ error: 'Unauthorized' });
+  const csrfToken = signCsrfToken(authToken, CSRF_SECRET);
+  res.json({ csrfToken });
+});
+
+app.use((req, res, next) => {
+  const method = req.method.toUpperCase();
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return next();
+  if (csrfAllowedPublicPrefixes.some(prefix => req.path.startsWith(prefix))) return next();
+
+  const token = req.headers['x-csrf-token'];
+  const authToken = getAuthToken(req);
+  if (!verifyCsrfToken(token, authToken, CSRF_SECRET)) {
+    return res.status(403).json({ error: 'CSRF validation failed' });
+  }
+  next();
+});
 
 app.get('/api/health', async (_req, res) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true, db: 'connected' }); }

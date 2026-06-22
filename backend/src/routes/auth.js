@@ -23,6 +23,8 @@ const RP_ID = process.env.WEBAUTHN_RP_ID || new URL(APP_URL).hostname;
 const EXPECTED_ORIGIN = process.env.WEBAUTHN_ORIGIN || APP_URL;
 const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
 const PASSWORD_RESET_WINDOW_MS = 24 * 60 * 60 * 1000;
+const ACTIVATION_RESEND_COOLDOWN_MS = 60 * 1000;
+const ACTIVATION_RESEND_WINDOW_MS = 24 * 60 * 60 * 1000;
 const authAttempts = new Map();
 
 function authRateLimit(req, res, key, max = 10, windowMs = 10 * 60 * 1000) {
@@ -50,6 +52,22 @@ function passwordResetPolicy(row) {
   const sentCount = windowExpired ? 0 : Number(row?.reset_sent_count_24h || 0);
   const cooldownRemainingMs = lastSentAt ? Math.max(0, PASSWORD_RESET_COOLDOWN_MS - (now - lastSentAt)) : 0;
   const windowRemainingMs = windowExpired ? 0 : Math.max(0, PASSWORD_RESET_WINDOW_MS - (now - windowStartAt));
+  return {
+    cooldownSeconds: Math.ceil(cooldownRemainingMs / 1000),
+    remainingResends: Math.max(0, 3 - sentCount),
+    dailyLimitReached: sentCount >= 3,
+    windowResetSeconds: Math.ceil(windowRemainingMs / 1000),
+  };
+}
+
+function activationResendPolicy(row) {
+  const now = Date.now();
+  const lastSentAt = row?.activation_last_sent_at ? new Date(row.activation_last_sent_at).getTime() : null;
+  const windowStartAt = row?.activation_sent_window_start ? new Date(row.activation_sent_window_start).getTime() : null;
+  const windowExpired = !windowStartAt || (now - windowStartAt) >= ACTIVATION_RESEND_WINDOW_MS;
+  const sentCount = windowExpired ? 0 : Number(row?.activation_sent_count_24h || 0);
+  const cooldownRemainingMs = lastSentAt ? Math.max(0, ACTIVATION_RESEND_COOLDOWN_MS - (now - lastSentAt)) : 0;
+  const windowRemainingMs = windowExpired ? 0 : Math.max(0, ACTIVATION_RESEND_WINDOW_MS - (now - windowStartAt));
   return {
     cooldownSeconds: Math.ceil(cooldownRemainingMs / 1000),
     remainingResends: Math.max(0, 3 - sentCount),
@@ -111,8 +129,8 @@ router.post('/register', async (req, res) => {
       const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 h
 
       const { rows } = await pool.query(
-        `INSERT INTO users (email, password_hash, name, is_active, activation_token, activation_expires)
-         VALUES ($1, $2, $3, FALSE, $4, $5)
+        `INSERT INTO users (email, password_hash, name, is_active, activation_token, activation_expires, activation_last_sent_at)
+         VALUES ($1, $2, $3, FALSE, $4, $5, NOW())
         RETURNING id, email, name, timezone`,
         [email.toLowerCase().trim(), hash, name.trim(), token, expires]
       );
@@ -122,6 +140,10 @@ router.post('/register', async (req, res) => {
       return res.status(201).json({
         requiresActivation: true,
         message: 'Account created. Please check your email to activate your account.',
+        cooldownSeconds: 60,
+        remainingResends: 3,
+        dailyLimitReached: false,
+        windowResetSeconds: 24 * 60 * 60,
       });
     } else {
       // Email disabled → activate immediately
@@ -251,24 +273,79 @@ router.get('/admin-approve', async (req, res) => {
 router.post('/resend-activation', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
+  const normalizedEmail = email.toLowerCase().trim();
+  let client;
   try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const { rows: users } = await client.query(
+      `SELECT id, email, name, is_active, activation_last_sent_at, activation_sent_count_24h, activation_sent_window_start
+       FROM users
+       WHERE email = $1
+       FOR UPDATE`,
+      [normalizedEmail]
+    );
+    const user = users[0];
+    if (!user || user.is_active) {
+      await client.query('COMMIT');
+      return res.json({ message: 'If that email exists and is unactivated, a new link has been sent.' });
+    }
+
+    const policy = activationResendPolicy(user);
+    if (policy.dailyLimitReached || policy.cooldownSeconds > 0) {
+      await client.query('ROLLBACK');
+      return res.status(429).json({
+        error: policy.dailyLimitReached
+          ? 'Activation email resend limit reached for today. Please try again later.'
+          : 'Please wait before requesting another activation email.',
+        ...policy,
+      });
+    }
+
     const newToken   = uuidv4();
     const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const { rows } = await pool.query(
+    const now = new Date();
+    const { rows } = await client.query(
       `UPDATE users
-       SET activation_token = $1, activation_expires = $2
-       WHERE email = $3 AND is_active = FALSE
+       SET activation_token = $1,
+           activation_expires = $2,
+           activation_last_sent_at = $3,
+           activation_sent_count_24h = CASE
+             WHEN activation_sent_window_start IS NULL OR activation_sent_window_start <= NOW() - INTERVAL '24 hours' THEN 1
+             ELSE COALESCE(activation_sent_count_24h, 0) + 1
+           END,
+           activation_sent_window_start = CASE
+             WHEN activation_sent_window_start IS NULL OR activation_sent_window_start <= NOW() - INTERVAL '24 hours' THEN $3
+             ELSE activation_sent_window_start
+           END
+       WHERE id = $4 AND is_active = FALSE
        RETURNING email, name`,
-      [newToken, newExpires, email.toLowerCase().trim()]
+      [newToken, newExpires, now, user.id]
     );
+    await client.query('COMMIT');
     // Always respond the same to avoid email enumeration
     if (rows.length) {
       await sendActivationEmail(rows[0].email, rows[0].name, newToken);
     }
-    res.json({ message: 'If that email exists and is unactivated, a new link has been sent.' });
+    res.json({
+      message: 'If that email exists and is unactivated, a new link has been sent.',
+      cooldownSeconds: 60,
+      remainingResends: Math.max(0, policy.remainingResends - 1),
+      dailyLimitReached: policy.remainingResends - 1 <= 0,
+      windowResetSeconds: policy.windowResetSeconds || 24 * 60 * 60,
+    });
   } catch (err) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Ignore rollback errors from already-closed transactions.
+      }
+    }
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    client?.release();
   }
 });
 

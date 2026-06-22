@@ -1,4 +1,5 @@
 import pool from './pool.js';
+import { pathToFileURL } from 'url';
 
 const schema = `
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -13,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   is_active BOOLEAN NOT NULL DEFAULT FALSE,
   activation_token TEXT,
   activation_expires TIMESTAMPTZ,
+  activation_last_sent_at TIMESTAMPTZ,
+  activation_sent_count_24h INTEGER NOT NULL DEFAULT 0,
+  activation_sent_window_start TIMESTAMPTZ,
   reset_token TEXT,
   reset_expires TIMESTAMPTZ,
   reset_last_sent_at TIMESTAMPTZ,
@@ -160,9 +164,13 @@ CREATE INDEX IF NOT EXISTS idx_races_race_date ON races(race_date DESC);
 CREATE INDEX IF NOT EXISTS idx_races_status ON races(status);
 CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
 CREATE INDEX IF NOT EXISTS idx_passkey_challenges_lookup ON passkey_challenges(challenge, type);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_last_sent_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_sent_count_24h INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_sent_window_start TIMESTAMPTZ;
 `;
 
-async function migrate() {
+async function migrate({ closePool = false } = {}) {
   const client = await pool.connect();
   try {
     console.log('Running migrations...');
@@ -170,11 +178,19 @@ async function migrate() {
     console.log('Migrations complete.');
   } catch (err) {
     console.error('Migration failed:', err);
-    process.exit(1);
+    throw err;
   } finally {
     client.release();
-    await pool.end();
+    if (closePool) {
+      await pool.end();
+    }
   }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  migrate({ closePool: true }).catch(() => {
+    process.exit(1);
+  });
 }
 
 export default migrate;

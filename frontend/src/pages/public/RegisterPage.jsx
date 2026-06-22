@@ -1,11 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth.jsx';
 import { api } from '../../lib/api.js';
 import ThemeToggle from '../../components/ThemeToggle.jsx';
 
+const STORAGE_PREFIX = 'rt_activation_resend_';
+
+function readResendState(email) {
+  if (!email) return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + email.toLowerCase().trim());
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeResendState(email, value) {
+  if (!email) return;
+  localStorage.setItem(STORAGE_PREFIX + email.toLowerCase().trim(), JSON.stringify(value));
+}
+
 export default function RegisterPage() {
-  const { register } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
@@ -14,6 +29,31 @@ export default function RegisterPage() {
   const [pendingEmail, setPendingEmail] = useState('');
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState('');
+  const [resendError, setResendError] = useState('');
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [remainingResends, setRemainingResends] = useState(3);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const saved = readResendState(pendingEmail);
+    if (saved) {
+      setCooldownUntil(saved.cooldownUntil || 0);
+      setRemainingResends(saved.remainingResends ?? 3);
+    }
+  }, [pendingEmail]);
+
+  const cooldownSeconds = useMemo(() => Math.max(0, Math.ceil((cooldownUntil - now) / 1000)), [cooldownUntil, now]);
+  const resendBlocked = cooldownSeconds > 0 || remainingResends <= 0;
+  const resendButtonLabel = cooldownSeconds > 0
+    ? `Resend available in ${cooldownSeconds}s`
+    : remainingResends <= 0
+      ? 'Resend limit reached'
+      : 'Resend activation email';
 
   const submit = async (e) => {
     e.preventDefault();
@@ -23,6 +63,14 @@ export default function RegisterPage() {
       if (data.requiresActivation) {
         // Email activation flow
         setPendingEmail(form.email);
+        const nextCooldownUntil = Date.now() + ((data.cooldownSeconds || 60) * 1000);
+        const nextRemaining = typeof data.remainingResends === 'number' ? data.remainingResends : 3;
+        setCooldownUntil(nextCooldownUntil);
+        setRemainingResends(nextRemaining);
+        writeResendState(form.email, {
+          cooldownUntil: nextCooldownUntil,
+          remainingResends: nextRemaining,
+        });
       } else {
         // Email disabled — direct login
         localStorage.setItem('rt_token', data.token);
@@ -36,12 +84,31 @@ export default function RegisterPage() {
   };
 
   const resend = async () => {
-    setResending(true); setResendMsg('');
+    setResending(true); setResendMsg(''); setResendError('');
     try {
-      await api.resendActivation({ email: pendingEmail });
+      const res = await api.resendActivation({ email: pendingEmail });
+      const nextCooldownUntil = Date.now() + ((res.cooldownSeconds || 60) * 1000);
+      const nextRemaining = typeof res.remainingResends === 'number' ? res.remainingResends : Math.max(0, remainingResends - 1);
+      setCooldownUntil(nextCooldownUntil);
+      setRemainingResends(nextRemaining);
+      writeResendState(pendingEmail, {
+        cooldownUntil: nextCooldownUntil,
+        remainingResends: nextRemaining,
+      });
       setResendMsg('A new activation link has been sent to your email.');
-    } catch {
-      setResendMsg('Could not resend. Please try again.');
+    } catch (err) {
+      const cooldown = err.data?.cooldownSeconds || 0;
+      const remaining = typeof err.data?.remainingResends === 'number' ? err.data.remainingResends : remainingResends;
+      if (cooldown) {
+        const nextCooldownUntil = Date.now() + cooldown * 1000;
+        setCooldownUntil(nextCooldownUntil);
+        setRemainingResends(remaining);
+        writeResendState(pendingEmail, { cooldownUntil: nextCooldownUntil, remainingResends: remaining });
+      } else {
+        setRemainingResends(remaining);
+        writeResendState(pendingEmail, { cooldownUntil, remainingResends: remaining });
+      }
+      setResendError(err.message || 'Could not resend. Please try again.');
     } finally {
       setResending(false);
     }
@@ -64,8 +131,13 @@ export default function RegisterPage() {
               {resendMsg}
             </div>
           )}
-          <button onClick={resend} disabled={resending} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', marginBottom: 10 }}>
-            {resending ? 'Sending…' : 'Resend activation email'}
+          {resendError && (
+            <div className="alert-error" style={{ marginBottom: 14, textAlign: 'left' }}>
+              {resendError}
+            </div>
+          )}
+          <button onClick={resend} disabled={resending || resendBlocked} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: 10 }}>
+            {resending ? 'Sending…' : resendButtonLabel}
           </button>
           <Link to="/login" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Back to login</Link>
         </div>

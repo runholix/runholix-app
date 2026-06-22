@@ -25,6 +25,8 @@ const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
 const PASSWORD_RESET_WINDOW_MS = 24 * 60 * 60 * 1000;
 const ACTIVATION_RESEND_COOLDOWN_MS = 60 * 1000;
 const ACTIVATION_RESEND_WINDOW_MS = 24 * 60 * 60 * 1000;
+const EMAIL_CHANGE_COOLDOWN_MS = 60 * 1000;
+const EMAIL_CHANGE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const authAttempts = new Map();
 
 function authRateLimit(req, res, key, max = 10, windowMs = 10 * 60 * 1000) {
@@ -68,6 +70,22 @@ function activationResendPolicy(row) {
   const sentCount = windowExpired ? 0 : Number(row?.activation_sent_count_24h || 0);
   const cooldownRemainingMs = lastSentAt ? Math.max(0, ACTIVATION_RESEND_COOLDOWN_MS - (now - lastSentAt)) : 0;
   const windowRemainingMs = windowExpired ? 0 : Math.max(0, ACTIVATION_RESEND_WINDOW_MS - (now - windowStartAt));
+  return {
+    cooldownSeconds: Math.ceil(cooldownRemainingMs / 1000),
+    remainingResends: Math.max(0, 3 - sentCount),
+    dailyLimitReached: sentCount >= 3,
+    windowResetSeconds: Math.ceil(windowRemainingMs / 1000),
+  };
+}
+
+function emailChangePolicy(row) {
+  const now = Date.now();
+  const lastSentAt = row?.email_change_last_sent_at ? new Date(row.email_change_last_sent_at).getTime() : null;
+  const windowStartAt = row?.email_change_sent_window_start ? new Date(row.email_change_sent_window_start).getTime() : null;
+  const windowExpired = !windowStartAt || (now - windowStartAt) >= EMAIL_CHANGE_WINDOW_MS;
+  const sentCount = windowExpired ? 0 : Number(row?.email_change_sent_count_24h || 0);
+  const cooldownRemainingMs = lastSentAt ? Math.max(0, EMAIL_CHANGE_COOLDOWN_MS - (now - lastSentAt)) : 0;
+  const windowRemainingMs = windowExpired ? 0 : Math.max(0, EMAIL_CHANGE_WINDOW_MS - (now - windowStartAt));
   return {
     cooldownSeconds: Math.ceil(cooldownRemainingMs / 1000),
     remainingResends: Math.max(0, 3 - sentCount),
@@ -736,8 +754,11 @@ router.put('/email', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'new_email and password are required' });
 
   const normalized = new_email.toLowerCase().trim();
+  let client;
   try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.userId]);
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE', [req.userId]);
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
 
     // Verify password
@@ -753,26 +774,71 @@ router.put('/email', requireAuth, async (req, res) => {
     if (normalized === rows[0].email)
       return res.status(400).json({ error: 'New email is the same as current email' });
 
+    const policy = emailChangePolicy(rows[0]);
+    if (policy.dailyLimitReached || policy.cooldownSeconds > 0) {
+      await client.query('ROLLBACK');
+      return res.status(429).json({
+        error: policy.dailyLimitReached
+          ? 'Email change limit reached for today. Please try again later.'
+          : 'Please wait before requesting another email change confirmation.',
+        ...policy,
+      });
+    }
+
     const token   = uuidv4();
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const now = new Date();
 
-    await pool.query(
-      'UPDATE users SET pending_email=$1, email_change_token=$2, email_change_expires=$3 WHERE id=$4',
-      [normalized, token, expires, req.userId]
+    await client.query(
+      `UPDATE users
+       SET pending_email=$1,
+           email_change_token=$2,
+           email_change_expires=$3,
+           email_change_last_sent_at=$4,
+           email_change_sent_count_24h = CASE
+             WHEN email_change_sent_window_start IS NULL OR email_change_sent_window_start <= NOW() - INTERVAL '24 hours' THEN 1
+             ELSE COALESCE(email_change_sent_count_24h, 0) + 1
+           END,
+           email_change_sent_window_start = CASE
+             WHEN email_change_sent_window_start IS NULL OR email_change_sent_window_start <= NOW() - INTERVAL '24 hours' THEN $4
+             ELSE email_change_sent_window_start
+           END
+       WHERE id=$5`,
+      [normalized, token, expires, now, req.userId]
     );
 
     if (emailEnabled) {
       await sendEmailChangeConfirmation(normalized, rows[0].name, token);
-      res.json({ message: `Confirmation email sent to ${normalized}. Click the link to confirm.` });
+      await client.query('COMMIT');
+      res.json({
+        message: `Confirmation email sent to ${normalized}. Click the link to confirm.`,
+        cooldownSeconds: 60,
+        remainingResends: Math.max(0, policy.remainingResends - 1),
+        dailyLimitReached: policy.remainingResends - 1 <= 0,
+        windowResetSeconds: policy.windowResetSeconds || 24 * 60 * 60,
+      });
     } else {
       // Email disabled — apply immediately
-      await pool.query(
+      await client.query(
         'UPDATE users SET email=$1, pending_email=NULL, email_change_token=NULL, email_change_expires=NULL WHERE id=$2',
         [normalized, req.userId]
       );
+      await client.query('COMMIT');
       res.json({ message: 'Email updated (email confirmation disabled).', email: normalized });
     }
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+  } catch (err) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // ignore rollback errors
+      }
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client?.release();
+  }
 });
 
 // ── CONFIRM EMAIL CHANGE ──────────────────────────────────────────────────

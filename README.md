@@ -1,132 +1,269 @@
-# 🏃 Race Tracker
+# Runholix
+> [!IMPORTANT]
+> This project was developed with the help of AI (vibe coding). However, it was thoroughly reviewed by myself. It is not perfect or ideal but in my opinion it is acceptable and good enough for small production environment.<br><br>
+> I have very little interest to maintain this code unless there are few issues. Frankly, I tried my best to make sure the code base is somewhat maintainable but my free time is very limited.<br><br>
+> If you find any issues, feel free to report it or make a PR. Anything bellow this text is AI generated.
 
-A self-hosted web application to track all your running race registrations, results, and personal records. Built with React, Node.js/Express, PostgreSQL, and deployable with Docker Compose.
+Runholix is a self-hosted race log and training tracker for runners. It stores race registrations, results, personal records, training notes, upload attachments, and calendar feed links. The stack is React + Vite on the frontend, Express on the backend, and PostgreSQL for persistence.
 
 ## Features
 
-- **Full race log** — event name, date, location, bib number, confirmation number, registration fee
-- **Results tracking** — chip time, gun time, pace, overall / gender / age group placement
-- **Vitals** — heart rate, elevation gain, weather conditions
-- **Dashboard** — stats overview, personal bests (10k / half / marathon), yearly chart
-- **Filtering** — by status, year, search
-- **Race report** — free-text notes and full race report field
-- **Links** — race website, official results, finisher certificate URLs
-- **Multi-user** — JWT auth, each user sees only their own races
+- Race log with event info, registration, distance/category, facility, RPC, result, condition/vitals, notes, and race report
+- Race detail and race add/edit views with tabbed layout
+- Dashboard with summary stats, yearly chart, and personal bests
+- Race list filtering, search, sorting, and pagination
+- Training log CRUD
+- Uploads for race routes, race results, attachments, and avatar images
+- Public avatar display and public `.ics` calendar feed
+- Passkey sign-in and passkey registration
+- Email-based account activation, approval, password reset, and email change flows
+- Cookie-based browser auth with CSRF protection
+- PWA shell with service worker caching and install support
 
----
+## Architecture
 
-## Quick start (Docker)
+- Frontend auth uses an `HttpOnly` cookie for browser sessions
+- Unsafe browser requests use CSRF tokens tied to the auth token
+- The frontend no longer persists the bearer JWT in `localStorage`
+- Private attachment files can be cached by the service worker for offline use and are cleared on logout or auth loss
+- The frontend is route-split with lazy loading for the main pages
+
+## Quick Start
+
+### Docker
 
 ```bash
-# 1. Clone & configure
-git clone <your-repo>
-cd race-tracker
 cp .env.example .env
-nano .env   # Set a strong JWT_SECRET and POSTGRES_PASSWORD
-
-# 2. Start everything
-docker compose up -d
-
-# 3. Open http://localhost and register your account
+docker compose up -d --build
 ```
 
-## Development (local)
+Open `http://localhost` and register or sign in.
 
-### Prerequisites
+### Local development
+
+Prerequisites:
 - Node.js 20+
-- PostgreSQL 14+
+- PostgreSQL 16+
 
-### Backend
+Backend:
+
 ```bash
 cd backend
 npm install
-# Create a .env file:
-echo 'DATABASE_URL=postgres://racetracker:changeme@localhost:5432/racetracker
-JWT_SECRET=devsecret
-PORT=3001' > .env
-
-npm start
+npm run dev
 ```
 
-### Frontend
+Frontend:
+
 ```bash
 cd frontend
 npm install
-npm run dev   # Vite dev server at http://localhost:5173
+npm run dev
 ```
 
----
+If you run the frontend outside Docker, make sure `VITE_API_URL` points to the backend API base, usually `/api` or `http://localhost:3001/api`.
 
-## Environment variables
+## Environment Variables
 
-| Variable | Default | Description |
+The root `.env.example` is the best source of truth. The key variables are:
+
+| Variable | Used by | Description |
 |---|---|---|
-| `POSTGRES_USER` | `racetracker` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | `changeme` | **Change in production** |
-| `POSTGRES_DB` | `racetracker` | Database name |
-| `JWT_SECRET` | `supersecretchangeme` | **Change in production** |
-| `VITE_API_URL` | `/api` | Frontend API base URL |
+| `APP_NAME` | backend, frontend | Display name used in UI, email content, and manifest metadata |
+| `APP_URL` | backend | Public URL used in email links and WebAuthn origin defaults |
+| `APP_TIMEZONE` | backend | Default timezone used by scheduler jobs |
+| `POSTGRES_HOST` | Docker compose | PostgreSQL host and port, for example `db:5432` |
+| `POSTGRES_USER` | backend, Docker compose | PostgreSQL username |
+| `POSTGRES_PASSWORD` | backend, Docker compose | PostgreSQL password |
+| `POSTGRES_DB` | backend, Docker compose | PostgreSQL database name |
+| `DATABASE_URL` | backend | Direct database connection string when running outside Docker |
+| `DATABASE_SSL` | backend | Set to `true` to enable SSL for the PostgreSQL connection |
+| `PORT` | backend | API port, default `3001` |
+| `JWT_SECRET` | backend | JWT signing secret |
+| `CSRF_SECRET` | backend | CSRF signing secret; falls back to `JWT_SECRET` if unset |
+| `CORS_ORIGIN` | backend | Allowed browser origin or comma-separated list of origins |
+| `COOKIE_SECURE` | backend | Set to `true` when serving over HTTPS |
+| `COOKIE_SAMESITE` | backend | Cookie `SameSite` policy, default `lax` |
+| `WEBAUTHN_RP_ID` | backend | Optional WebAuthn relying party ID |
+| `WEBAUTHN_ORIGIN` | backend | Optional WebAuthn expected origin |
+| `ADMIN_EMAIL` | backend | Enables admin approval flow when set |
+| `UPLOAD_DIR` | backend | Filesystem path for uploads, default `/uploads` |
+| `VITE_API_URL` | frontend | Frontend API base URL, default `/api` |
+| `VITE_APP_NAME` | frontend | Frontend display name used in the browser title and UI |
+| `SMTP_HOST` | backend | Enables email delivery when set |
+| `SMTP_PORT` | backend | SMTP port, default `587` |
+| `SMTP_SECURE` | backend | SMTP transport mode: `plain`, `tls`, or `ssl` |
+| `SMTP_USER` | backend | SMTP username |
+| `SMTP_PASS` | backend | SMTP password |
+| `SMTP_FROM` | backend | From address used for outgoing mail |
+| `SMTP_POOL` | backend | Enable or disable SMTP connection pooling |
+| `SMTP_POOL_MAX_CONNECTIONS` | backend | SMTP pool size |
+| `SMTP_POOL_MAX_MESSAGES` | backend | Max messages per pooled SMTP connection |
 
----
+## API Endpoints
 
-## API endpoints
+### Health
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/auth/register` | Create account |
-| POST | `/api/auth/login` | Login, returns JWT |
-| GET | `/api/auth/me` | Current user info |
-| GET | `/api/races` | List races (filter: status, year, search, sort, order, page, pageSize) |
-| GET | `/api/races/stats` | Aggregate stats & PBs |
-| GET | `/api/races/:id` | Single race |
-| POST | `/api/races` | Create race |
-| PUT | `/api/races/:id` | Update race |
-| DELETE | `/api/races/:id` | Delete race |
+- `GET /api/health`
 
----
+### Auth
 
-## Project structure
+Public:
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/activate`
+- `POST /api/auth/resend-activation`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/forgot-password/confirm`
+- `POST /api/auth/admin-approve`
+- `GET /api/auth/admin-approve`
+- `POST /api/auth/passkeys/login/options`
+- `POST /api/auth/passkeys/login/verify`
+- `POST /api/auth/confirm-email`
 
-```
-race-tracker/
+Authenticated:
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `PUT /api/auth/name`
+- `PUT /api/auth/timezone`
+- `PUT /api/auth/password`
+- `GET /api/auth/passkeys`
+- `POST /api/auth/passkeys/register/options`
+- `POST /api/auth/passkeys/register/verify`
+- `DELETE /api/auth/passkeys/:id`
+- `PUT /api/auth/email`
+- `GET /api/auth/email-reminder`
+- `PUT /api/auth/email-reminder`
+- `GET /api/auth/ical`
+- `PUT /api/auth/ical`
+
+CSRF:
+- `GET /api/auth/csrf` returns a token for authenticated browser sessions
+- Unsafe requests require `x-csrf-token`
+
+### Races
+
+- `GET /api/races`
+- `GET /api/races/stats`
+- `GET /api/races/dashboard`
+- `GET /api/races/calendar`
+- `GET /api/races/:id`
+- `POST /api/races`
+- `PUT /api/races/:id`
+- `DELETE /api/races/:id`
+
+Query parameters used by the list and dashboard routes include filtering by status, year, search, sort, order, page, and page size.
+
+### Training
+
+- `GET /api/training`
+- `GET /api/training/:id`
+- `POST /api/training`
+- `PUT /api/training/:id`
+- `DELETE /api/training/:id`
+
+### Uploads
+
+- `POST /api/upload/route`
+- `POST /api/upload/result`
+- `GET /api/upload/route-file/:userId/:filename`
+- `DELETE /api/upload/route-file/:userId/:filename`
+- `POST /api/upload/attachment`
+- `GET /api/upload/attachment/:userId/:filename`
+- `DELETE /api/upload/attachment/:userId/:filename`
+- `GET /api/upload/parse/:userId/:filename`
+- `POST /api/upload/avatar`
+- `DELETE /api/upload/avatar`
+- `GET /api/upload/avatar/:userId`
+
+### Calendar Feed
+
+- `GET /ical/:token.ics`
+
+This feed is public and read-only.
+
+## Project Structure
+
+```text
+runholix-app/
+├── README.md
 ├── docker-compose.yml
 ├── .env.example
 ├── backend/
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/
-│       ├── index.js          # Express app + auto-migration
-│       ├── db/pool.js        # pg Pool
-│       ├── middleware/auth.js # JWT middleware
-│       └── routes/
-│           ├── auth.js
-│           └── races.js
+│       ├── index.js
+│       ├── scheduler.js
+│       ├── email.js
+│       ├── db/
+│       │   ├── pool.js
+│       │   └── migrate.js
+│       ├── middleware/
+│       │   └── auth.js
+│       ├── routes/
+│       │   ├── auth.js
+│       │   ├── races.js
+│       │   ├── training.js
+│       │   ├── upload.js
+│       │   └── ical.js
+│       └── utils/
+│           ├── authCookies.js
+│           └── activityParser.js
 └── frontend/
     ├── Dockerfile
     ├── nginx.conf
     ├── package.json
-    ├── vite.config.js
+    ├── index.html
+    ├── public/
+    │   ├── sw.js
+    │   ├── manifest.webmanifest
+    │   ├── favicon-light.svg
+    │   ├── favicon-dark.svg
+    │   └── pwa-icon-light.svg
     └── src/
-        ├── App.jsx
         ├── main.jsx
+        ├── App.jsx
         ├── index.css
-        ├── lib/api.js
-        ├── hooks/useAuth.jsx
-        ├── components/Layout.jsx
+        ├── hooks/
+        │   ├── useAuth.jsx
+        │   ├── useTheme.jsx
+        │   └── useWindowWidth.jsx
+        ├── lib/
+        │   ├── api.js
+        │   ├── appName.js
+        │   ├── utils.js
+        │   └── version.js
+        ├── components/
+        │   ├── Layout.jsx
+        │   ├── TabButton.jsx
+        │   ├── PdfViewer.jsx
+        │   ├── PdfUploader.jsx
+        │   ├── ResultFileUploader.jsx
+        │   ├── RouteUploader.jsx
+        │   ├── ThemeToggle.jsx
+        │   ├── TimezoneSelect.jsx
+        │   └── ...
         └── pages/
-            ├── LoginPage.jsx
-            ├── RegisterPage.jsx
             ├── DashboardPage.jsx
-            ├── RacesPage.jsx
-            ├── RaceFormPage.jsx
-            └── RaceDetailPage.jsx
+            ├── calendar/
+            ├── public/
+            ├── settings/
+            └── races/
 ```
 
----
+## Deployment Notes
 
-## Deployment tips
+- The frontend container serves the static app through Nginx and proxies `/api/` to the backend container
+- PostgreSQL data is persisted in the `postgres_data` volume
+- Upload files are persisted in the `uploads_data` volume
+- Set `COOKIE_SECURE=true` when deploying behind HTTPS
+- Set `CORS_ORIGIN` to your frontend origin in production
+- If you use email features, configure the SMTP variables before starting the backend
 
-- Put a reverse proxy (Caddy / Traefik / Nginx) in front for HTTPS
-- The frontend container already includes Nginx and proxies `/api/` to the backend container
-- PostgreSQL data persists in the `postgres_data` Docker volume
-- Back up the volume regularly: `docker run --rm -v race-tracker_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/db-backup.tar.gz /data`
+## Notes
+
+- The frontend uses a service worker for shell caching and offline support
+- Private file caching is session-scoped and cleared on logout or auth failure
+- The browser app uses cookie auth; the backend still accepts JWT-based auth for compatibility
+

@@ -52,6 +52,78 @@ function mapRace(row) {
   };
 }
 
+const raceSelectColumns = `
+  id,
+  user_id,
+  event_name,
+  race_date::text AS race_date,
+  flag_off_time,
+  cutoff_time,
+  route_file_path,
+  route_file_name,
+  location,
+  city,
+  country,
+  website_url,
+  instagram_url,
+  timezone,
+  status,
+  registration_fee,
+  registration_currency,
+  bib_number,
+  bib_name,
+  jersey_size,
+  registered_email,
+  registered_phone,
+  confirmation_number,
+  finish_time_target,
+  attachment_path,
+  attachment_name,
+  distance_km,
+  distance_label,
+  race_type,
+  category,
+  elevation_gain_req_m,
+  itra_point,
+  itra_url,
+  qualification,
+  finish_time_seconds,
+  gun_time_seconds,
+  overall_place,
+  overall_total,
+  gender_place,
+  gender_total,
+  age_group_place,
+  age_group_total,
+  age_group_label,
+  heart_rate_avg,
+  heart_rate_max,
+  actual_distance_km,
+  elevation_gain_m,
+  weather_temp_c,
+  weather_condition,
+  notes,
+  race_report,
+  results_url,
+  certificate_url,
+  facilities,
+  rpc_date_start::text AS rpc_date_start,
+  rpc_date_end::text AS rpc_date_end,
+  rpc_time,
+  rpc_location,
+  rpc_status,
+  rpc_attachment_path,
+  rpc_attachment_name,
+  rpc_notes,
+  mandatory_items,
+  strava_url,
+  result_file_path,
+  result_file_name,
+  registration_datetime::text AS registration_datetime,
+  created_at,
+  updated_at
+`;
+
 router.get('/calendar', async (req, res) => {
   const year = Number(req.query.year);
   if (!year) return res.status(400).json({ error: 'year required' });
@@ -393,7 +465,7 @@ router.post('/', async (req, res) => {
         $43,$44,$45,$46,$47,$48,$49,$50,$51,$52,
         $53,$54,$55,$56,$57,$58,$59,$60,$61,$62,
         $63,$64,$65,$66
-      ) RETURNING *`,
+      ) RETURNING ${raceSelectColumns}`,
       [
         req.userId,                          // $1
         b.event_name,                        // $2
@@ -512,7 +584,7 @@ router.put('/:id', async (req, res) => {
         result_file_path=$62,    result_file_name=$63,
         registration_datetime=$64, timezone=$65,
         updated_at=NOW()
-      WHERE id=$66 AND user_id=$67 RETURNING *`,
+      WHERE id=$66 AND user_id=$67 RETURNING ${raceSelectColumns}`,
       [
         b.event_name,                        // $1
         b.race_date,                         // $2

@@ -1,10 +1,11 @@
 import { Link, useNavigate } from "react-router-dom";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfDay } from "date-fns";
 import { fmtTime } from "../../../lib/utils.js";
 import { api } from "../../../lib/api.js";
 import { useState } from "react";
+import Alert from "../../../components/Alert.jsx";
 
-export default function HeaderSection({ race, id }) {
+export default function HeaderSection({ race, id, rpcTabVisible }) {
     const STATUS_META = {
         completed: { label: 'Completed', cls: 'badge-completed' },
         registered: { label: 'Registered', cls: 'badge-registered' },
@@ -15,6 +16,14 @@ export default function HeaderSection({ race, id }) {
     const sm = STATUS_META[race.status] || {};
     const navigate = useNavigate();
     const [deleting, setDeleting] = useState(false);
+
+    const today = startOfDay(new Date());
+    const regDate = race.registration_datetime ? startOfDay(parseISO(race.registration_datetime)) : null;
+    const regDateReached = !!regDate && today >= regDate;
+    const rpcStartDate = race.rpc_date_start ? startOfDay(parseISO(race.rpc_date_start)) : null;
+    const rpcStartReached = !!rpcStartDate && today >= rpcStartDate;
+    const raceDate = race.race_date ? startOfDay(parseISO(race.race_date)) : null;
+    const raceDateReached = !!raceDate && today >= raceDate;
 
     const handleDelete = async () => {
         if (!confirm(`Delete "${race.event_name}"? This cannot be undone.`)) return;
@@ -48,6 +57,30 @@ export default function HeaderSection({ race, id }) {
                     </div>
                 </div>
             </div>
+
+            {race.status === 'upcoming' && regDateReached && (
+                <div style={{ marginBottom: 12 }}>
+                    <Alert type="info" message="It's time to register to this race, update the race status to 'Registered' and complete the details." />
+                </div>
+            )}
+
+            {race.status === 'registered' && race.rpc_status !== 'collected' && !rpcTabVisible && (
+                <div style={{ marginBottom: 12 }}>
+                    <Alert type="warning" message="You don't have race pack collection details filled out." />
+                </div>
+            )}
+
+            {race.status === 'registered' && race.rpc_status !== 'collected' && rpcStartReached && (
+                <div style={{ marginBottom: 12 }}>
+                    <Alert type="warning" message="You haven't collected the race pack collection." />
+                </div>
+            )}
+
+            {race.status === 'registered' && raceDateReached && (
+                <div style={{ marginBottom: 12 }}>
+                    <Alert type="info" message="It's already race day, how is your race? Update the race status and fill out the results." />
+                </div>
+            )}
 
             {/* Result highlight cards */}
             {race.status === 'completed' && race.finish_time_seconds && (

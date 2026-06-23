@@ -19,6 +19,7 @@
   --color-success-border: #4ade80;
   --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
+  --color-warning-border: #fbbf24;
   --color-danger: #dc2626;
   --color-danger-bg: #fef2f2;
   --color-danger-border: #fca5a5;
@@ -51,6 +52,7 @@
   --color-success-border: #15803d;
   --color-warning: #fbbf24;
   --color-warning-bg: #2a1c05;
+  --color-warning-border: #b45309;
   --color-danger: #f87171;
   --color-danger-bg: #2d0b0b;
   --color-danger-border: #7f1d1d;

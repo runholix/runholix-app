@@ -9,7 +9,8 @@ import RegistrationSection from "./RegistrationSection.jsx";
 import DistanceCategorySection from "./DistanceCategorySection.jsx";
 import RacePackCollectionSection from "./RacePackCollectionSection.jsx";
 import ResultSection from "./ResultSection.jsx";
-import {useAuth} from "../../../hooks/useAuth.jsx";
+import { useAuth } from "../../../hooks/useAuth.jsx";
+import TabButton from "../../../components/TabButton.jsx";
 
 // ── Default state ─────────────────────────────────────────────────────────
 const EMPTY = {
@@ -58,6 +59,7 @@ export default function RaceFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [originalRaceDate, setOriginalRaceDate] = useState('');
+  const [activeTab, setActiveTab] = useState('info');
 
   // Track files uploaded this session so we can delete them if user cancels
   const pendingUploads = useRef([]);
@@ -236,46 +238,51 @@ export default function RaceFormPage() {
 
       <form onSubmit={submit}>
         <div className="card">
-
-          {/* ── EVENT INFO ─────────────────────────────────────────── */}
-          <EventInfoSection isTrail={isTrail} makeOnClear={makeOnClear} setVal={setVal} trackUpload={trackUpload} set={set} form={form} userId={userId} raceDateExists={raceDateExists} />
-
-          {/* ── REGISTRATION ───────────────────────────────────────── */}
-          <RegistrationSection isTrail={isTrail} makeOnClear={makeOnClear} set={set} setVal={setVal} form={form} userId={userId} />
-
-          {/* ── DISTANCE & CATEGORY ────────────────────────────────── */}
-          <DistanceCategorySection isTrail={isTrail} set={set} form={form} />
-
-          {/* ── FACILITY ───────────────────────────────────────────── */}
-          <FacilitySection facilities={form.facilities} onChange={facs => setVal('facilities', facs)} />
-
-          {/* ── RACE PACK COLLECTION ───────────────────────────────── */}
-          <RacePackCollectionSection setVal={setVal} set={set} makeOnClear={makeOnClear} form={form} userId={userId} trackUpload={trackUpload} />
-
-          {/* ── MANDATORY ITEMS (trail only) ───────────────────────── */}
-          {isTrail && (
-            <div style={{ marginTop:24 }}>
-              <MandatoryItemsSection items={form.mandatory_items} onChange={items => setVal('mandatory_items', items)} />
-            </div>
-          )}
-
-          {/* ── RESULTS ────────────────────────────────────────────── */}
-          {showResults && (
-              <ResultSection setVal={setVal} set={set} makeOnClear={makeOnClear} form={form} userId={userId} trackUpload={trackUpload} />
-          )}
-
-          {/* ── NOTES ──────────────────────────────────────────────── */}
-          <div className="form-section-title">Notes</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:16, marginBottom:8 }}>
-            <Field label="Quick notes">
-              <textarea value={form.notes} onChange={set('notes')} rows={3}
-                placeholder="Pre-race goals, logistics, reminders…" style={{ resize:'vertical' }} />
-            </Field>
-            <Field label="Race report">
-              <textarea value={form.race_report} onChange={set('race_report')} rows={6}
-                placeholder="How did it go? How did you feel at each km? What would you do differently?" style={{ resize:'vertical' }} />
-            </Field>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+            <TabButton active={activeTab === 'info'} onClick={() => setActiveTab('info')} icon="ti-info-circle">Info</TabButton>
+            <TabButton active={activeTab === 'rpc'} onClick={() => setActiveTab('rpc')} icon="ti-package">RPC</TabButton>
+            <TabButton active={activeTab === 'result'} onClick={() => setActiveTab('result')} icon="ti-chart-bar">Result</TabButton>
           </div>
+
+          {activeTab === 'info' && (
+            <>
+              <EventInfoSection isTrail={isTrail} makeOnClear={makeOnClear} setVal={setVal} trackUpload={trackUpload} set={set} form={form} userId={userId} raceDateExists={raceDateExists} />
+              <RegistrationSection isTrail={isTrail} makeOnClear={makeOnClear} set={set} setVal={setVal} form={form} userId={userId} />
+              <DistanceCategorySection isTrail={isTrail} set={set} form={form} />
+              <FacilitySection facilities={form.facilities} onChange={facs => setVal('facilities', facs)} />
+            </>
+          )}
+
+          {activeTab === 'rpc' && (
+            <>
+              <RacePackCollectionSection setVal={setVal} set={set} makeOnClear={makeOnClear} form={form} userId={userId} trackUpload={trackUpload} />
+              {isTrail && (
+                <div style={{ marginTop:24 }}>
+                  <MandatoryItemsSection items={form.mandatory_items} onChange={items => setVal('mandatory_items', items)} />
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'result' && (
+            <>
+              {showResults && (
+                <ResultSection setVal={setVal} set={set} makeOnClear={makeOnClear} form={form} userId={userId} trackUpload={trackUpload} />
+              )}
+
+              <div className="form-section-title">Notes</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:16, marginBottom:8 }}>
+                <Field label="Quick notes">
+                  <textarea value={form.notes} onChange={set('notes')} rows={3}
+                    placeholder="Pre-race goals, logistics, reminders…" style={{ resize:'vertical' }} />
+                </Field>
+                <Field label="Race report">
+                  <textarea value={form.race_report} onChange={set('race_report')} rows={6}
+                    placeholder="How did it go? How did you feel at each km? What would you do differently?" style={{ resize:'vertical' }} />
+                </Field>
+              </div>
+            </>
+          )}
 
           {/* ── ACTIONS ────────────────────────────────────────────── */}
           <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:24, paddingTop:20, borderTop:'1px solid var(--color-border)', flexWrap:'wrap' }}>

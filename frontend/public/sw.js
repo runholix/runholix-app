@@ -1,8 +1,11 @@
-const VERSION_URL = '/version.json';
 const CACHE_PREFIX = 'runholix-shell-v';
+const PRIVATE_CACHE_PREFIX = 'runholix-private-v';
 const CACHE_NAME = new URL(self.location.href).searchParams.get('v')
   ? `${CACHE_PREFIX}${new URL(self.location.href).searchParams.get('v')}`
   : `${CACHE_PREFIX}0`;
+const PRIVATE_CACHE_NAME = new URL(self.location.href).searchParams.get('v')
+  ? `${PRIVATE_CACHE_PREFIX}${new URL(self.location.href).searchParams.get('v')}`
+  : `${PRIVATE_CACHE_PREFIX}0`;
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',
@@ -13,20 +16,21 @@ function isApiRequest(url) {
   return url.pathname.startsWith('/api/') || url.pathname.startsWith('/ical/');
 }
 
+function isPrivateFileRequest(url) {
+  return (
+    url.pathname.startsWith('/api/upload/attachment/') ||
+    url.pathname.startsWith('/api/upload/route-file/')
+  );
+}
+
 async function cacheShell() {
   const cache = await caches.open(CACHE_NAME);
   await cache.addAll(APP_SHELL);
 }
 
-async function getRemoteVersion() {
-  try {
-    const res = await fetch(VERSION_URL, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.version || null;
-  } catch {
-    return null;
-  }
+async function clearPrivateCache() {
+  const keys = await caches.keys();
+  await Promise.all(keys.filter(key => key.startsWith(PRIVATE_CACHE_PREFIX)).map(key => caches.delete(key)));
 }
 
 self.addEventListener('install', event => {
@@ -39,9 +43,17 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)));
+    await Promise.all(
+      keys.filter(key => key !== CACHE_NAME && !key.startsWith(PRIVATE_CACHE_PREFIX)).map(key => caches.delete(key))
+    );
     await self.clients.claim();
   })());
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'CLEAR_PRIVATE_CACHE') {
+    event.waitUntil(clearPrivateCache());
+  }
 });
 
 self.addEventListener('fetch', event => {
@@ -55,22 +67,14 @@ self.addEventListener('fetch', event => {
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
-      const remoteVersion = await getRemoteVersion();
-      const currentVersion = new URL(self.location.href).searchParams.get('v');
-      const shouldRefreshShell = remoteVersion && currentVersion && remoteVersion !== currentVersion;
-
-      if (!shouldRefreshShell) {
-        const cachedShell = await cache.match('/') || await cache.match('/index.html');
-        if (cachedShell) return cachedShell;
-      }
+      const cachedShell = await cache.match('/') || await cache.match('/index.html');
+      if (cachedShell) return cachedShell;
 
       try {
         const fresh = await fetch('/');
         cache.put('/', fresh.clone());
         return fresh;
       } catch {
-        const cachedShell = await cache.match('/') || await cache.match('/index.html');
-        if (cachedShell) return cachedShell;
         return Response.error();
       }
     })());
@@ -78,6 +82,18 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith((async () => {
+    if (isPrivateFileRequest(url)) {
+      const cache = await caches.open(PRIVATE_CACHE_NAME);
+      const cached = await cache.match(request);
+      const fetchPromise = fetch(request).then(response => {
+        if (response && response.ok) {
+          cache.put(request, response.clone());
+        }
+        return response;
+      }).catch(() => cached);
+      return cached || fetchPromise;
+    }
+
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(request);
     const fetchPromise = fetch(request).then(response => {

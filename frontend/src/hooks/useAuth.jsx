@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../lib/api.js';
+import { api, clearPrivateFileCache } from '../lib/api.js';
 
 const AuthContext = createContext(null);
 
@@ -10,34 +10,30 @@ export function AuthProvider({ children }) {
   const [avatarTs, setAvatarTs] = useState(() => Date.now());
 
   useEffect(() => {
+    localStorage.removeItem('rt_token');
     api.me()
       .then(u => setUser(u))
-      .catch(() => {
-        localStorage.removeItem('rt_token');
-      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (email, password) => {
     const data = await api.login({ email, password });
-    localStorage.setItem('rt_token', data.token);
     setUser(data.user);
   };
 
   const loginWithToken = (data) => {
-    localStorage.setItem('rt_token', data.token);
     setUser(data.user);
   };
 
   const register = async (name, email, password) => {
     const data = await api.register({ name, email, password });
-    localStorage.setItem('rt_token', data.token);
     setUser(data.user);
   };
 
   const logout = () => {
     api.logout().catch(() => {}).finally(() => {
-      localStorage.removeItem('rt_token');
+      clearPrivateFileCache();
       sessionStorage.removeItem('rt_csrf_token');
       sessionStorage.removeItem('rt_csrf_token_ts');
       setUser(null);
@@ -52,7 +48,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginWithToken, register, logout, updateUser, avatarTs }}>
+      <AuthContext.Provider value={{ user, loading, login, loginWithToken, register, logout, updateUser, avatarTs }}>
       {children}
     </AuthContext.Provider>
   );

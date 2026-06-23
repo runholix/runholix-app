@@ -26,8 +26,7 @@ export default function ActivatePage() {
           setStatus('pending_approval');
           setMessage(data.message || 'Your account is awaiting admin approval.');
         } else {
-          // Standard mode — account active, JWT returned
-          localStorage.setItem('rt_token', data.token);
+          // Standard mode — account active, cookie session is already set
           setStatus('success');
           setTimeout(() => navigate('/'), 2000);
         }

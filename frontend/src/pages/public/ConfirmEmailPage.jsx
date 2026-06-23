@@ -16,8 +16,7 @@ export default function ConfirmEmailPage() {
 
     api.confirmEmail({ token })
       .then(data => {
-        // Refresh JWT with updated email
-        localStorage.setItem('rt_token', data.token);
+        // Cookie session is already refreshed by the backend
         setNewEmail(data.user.email);
         setStatus('success');
         setTimeout(() => navigate('/settings'), 2500);

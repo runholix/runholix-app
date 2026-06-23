@@ -77,8 +77,7 @@ export default function RegisterPage() {
           remainingResends: nextRemaining,
         });
       } else {
-        // Email disabled — direct login
-        localStorage.setItem('rt_token', data.token);
+        // Email disabled — direct login, cookie session is already set
         navigate('/');
       }
     } catch (err) {

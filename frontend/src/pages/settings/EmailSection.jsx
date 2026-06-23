@@ -30,8 +30,23 @@ export default function EmailSection({ user }) {
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [remainingResends, setRemainingResends] = useState(3);
   const [now, setNow] = useState(Date.now());
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getEmailReminder();
+      setEnabled(data.enabled);
+    } catch (err) {
+      setResult({ type: "error", message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
+    load();
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -87,29 +102,59 @@ export default function EmailSection({ user }) {
     }
   };
 
+  const toggle = async () => {
+    setSaving(true); setResult(null);
+    try {
+      const data = await api.toggleEmailReminder({ action: enabled ? 'disable' : 'enable' });
+      setEnabled(data.enabled);
+      setResult({ type: 'success', message: data.enabled ? 'Email reminder notification enabled.' : 'Email reminder notification disabled.' });
+    } catch (err) {
+      setResult({ type: 'error', message: err.message });
+    } finally { setSaving(false); }
+  };
+
   return (
-    <Section title="Email address" description={<>Current email: <strong>{user?.email}</strong></>}>
+    <Section title="Email" description={<>Current email: <strong>{user?.email}</strong></>}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', paddingBottom: '18px' }}>
+        <div className="form-group" style={{ flex: '1 1 220px' }}>
+          <div style={{ fontWeight: 500, fontSize: 14 }}>Email reminder notification</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            {enabled ? 'Disable to stop ' : 'Enable to get '} reminder about race registration, race pack collection and race day.
+          </div>
+        </div>
+        <button
+            onClick={toggle}
+            disabled={saving || loading}
+            className={`btn btn-sm ${enabled ? 'btn-secondary' : 'btn-primary'}`}
+        >
+          <i className={`ti ${enabled ? 'ti-player-stop' : 'ti-player-play'}`} />
+          {saving ? 'Saving…' : loading ? 'Loading…' : enabled ? 'Disable' : 'Enable'}
+        </button>
+      </div>
       {sent ? (
         <Alert type="info" message="Check your new email inbox for a confirmation link. Your email will only change once you click it." />
       ) : (
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="grid-form-2">
-            <div className="form-group">
-              <label className="form-label">New email address <RequiredMarker /></label>
-              <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new@example.com" required />
+        <>
+          <div style={{ fontWeight: 500, fontSize: 14, paddingBottom: '6px' }}>Change email</div>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="grid-form-2">
+              <div className="form-group">
+                <label className="form-label">New email address <RequiredMarker /></label>
+                <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new@example.com" required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Current password (to confirm) <RequiredMarker /></label>
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Current password (to confirm) <RequiredMarker /></label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
+            <div>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={saving || blocked}>
+                {saving ? 'Sending…' : buttonLabel}
+              </button>
             </div>
-          </div>
-          <div>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={saving || blocked}>
-              {saving ? 'Sending…' : buttonLabel}
-            </button>
-          </div>
-          <Alert {...(result || {})} />
-        </form>
+            <Alert {...(result || {})} />
+          </form>
+        </>
       )}
     </Section>
   );

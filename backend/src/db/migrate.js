@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
   email_change_last_sent_at TIMESTAMPTZ,
   email_change_sent_count_24h INTEGER NOT NULL DEFAULT 0,
   email_change_sent_window_start TIMESTAMPTZ,
+  email_reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -186,6 +187,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_sent_window_start TIMESTAM
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_last_sent_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_sent_count_24h INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_sent_window_start TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 `;
 
 async function migrate({ closePool = false } = {}) {

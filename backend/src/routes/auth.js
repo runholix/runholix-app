@@ -897,6 +897,44 @@ router.put('/email', requireAuth, async (req, res) => {
   }
 });
 
+// Get email reminder status
+router.get('/email-reminder', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+        'SELECT email_reminder_enabled FROM users WHERE id=$1',
+        [req.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    res.json({ enabled: rows[0].email_reminder_enabled || false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+// enable/disable email reminder
+router.put('/email-reminder', requireAuth, async (req, res) => {
+  const { action } = req.body; // 'enable' | 'disable'
+  if (!['enable', 'disable'].includes(action))
+    return res.status(400).json({ error: 'action must be enable or disable' });
+
+  try {
+    if (action === 'disable') {
+      await pool.query(
+          'UPDATE users SET email_reminder_enabled=FALSE WHERE id=$1',
+          [req.userId]
+      );
+      return res.json({ enabled: false });
+    } else {
+      await pool.query(
+          'UPDATE users SET email_reminder_enabled=TRUE WHERE id=$1',
+          [req.userId]
+      );
+      return res.json({ enabled: true });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── CONFIRM EMAIL CHANGE ──────────────────────────────────────────────────
 router.post('/confirm-email', async (req, res) => {
   const { token } = req.body;

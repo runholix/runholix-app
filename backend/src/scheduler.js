@@ -156,6 +156,7 @@ async function runReminders() {
       WHERE r.status = 'upcoming'
         AND r.registration_datetime IS NOT NULL
         AND u.is_active = TRUE
+        AND u.email_reminder_enabled = TRUE
         AND (
           r.registration_reminder_d1_sent_at IS NULL
           OR r.registration_reminder_t1h_sent_at IS NULL
@@ -247,6 +248,7 @@ async function runReminders() {
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE u.is_active = TRUE
+        AND u.email_reminder_enabled = TRUE
         AND (
           (r.race_date = $2 AND r.status IN ('registered', 'upcoming') AND r.race_day_reminder_sent_at IS NULL)
           OR (r.rpc_date_start = $2 AND r.status IN ('registered', 'upcoming') AND r.rpc_reminder_sent_at IS NULL)

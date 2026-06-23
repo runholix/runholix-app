@@ -167,6 +167,8 @@ export const api = {
   deletePasskey:       (id, body) => request(`/auth/passkeys/${id}`, { method: 'DELETE', body: JSON.stringify(body) }),
   requestEmailChange: (body) => request('/auth/email',         { method: 'PUT',  body: JSON.stringify(body) }),
   confirmEmail:       (body) => request('/auth/confirm-email', { method: 'POST', body: JSON.stringify(body) }),
+  getEmailReminder:        ()     => request('/auth/email-reminder'),
+  toggleEmailReminder:     (body) => request('/auth/email-reminder', { method: 'PUT', body: JSON.stringify(body) }),
   adminApprovalDetails: (token) => request(`/auth/admin-approve?token=${encodeURIComponent(token)}`),
   adminApproval:      (body) => request('/auth/admin-approve', { method: 'POST', body: JSON.stringify(body) }),
 

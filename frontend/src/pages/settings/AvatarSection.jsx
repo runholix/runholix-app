@@ -83,7 +83,7 @@ export default function AvatarSection({ user, onUpdate }) {
     const initials = (user?.name || '?').charAt(0).toUpperCase();
 
     return (
-        <Section title="Profile photo" description="JPG, PNG or HEIC · Max 10 MB · Cropped to square, 512 × 512 px">
+        <Section title="Profile photo" description="JPG, PNG or HEIC · Max 10 MB">
             <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
                 {/* Avatar preview */}
                 <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -95,7 +95,7 @@ export default function AvatarSection({ user, onUpdate }) {
                         />
                     ) : (
                         <div style={{
-                            width: 80, height: 80, borderRadius: '50%',
+                            width: 100, height: 100, borderRadius: '50%',
                             background: 'var(--color-primary-bg)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             color: 'var(--color-primary)', fontWeight: 700, fontSize: 28,

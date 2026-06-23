@@ -12,6 +12,13 @@ import { isoBase64URL, isoUint8Array } from '@simplewebauthn/server/helpers';
 import pool from '../db/pool.js';
 import { emailEnabled, sendActivationEmail, sendWelcomeEmail, sendPasswordChangedEmail, sendPasswordResetEmail, sendEmailChangeConfirmation, sendAdminApprovalRequest, sendAccountApproved, sendAccountRejected, sendPasskeyAddedEmail, sendPasskeyRemovedEmail } from '../email.js';
 import { buildAuthCookie } from '../utils/authCookies.js';
+import {
+  pushEnabled,
+  getPushPublicKey,
+  upsertPushSubscription,
+  setPushSubscriptionEnabled,
+  deletePushSubscription,
+} from '../push.js';
 
 const router = Router();
 
@@ -932,6 +939,61 @@ router.put('/email-reminder', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/push-notification', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+        'SELECT endpoint, is_enabled FROM push_subscriptions WHERE user_id=$1 ORDER BY updated_at DESC',
+        [req.userId]
+    );
+
+    res.json({
+      devices: rows, // Array of { endpoint, is_enabled }
+      activeDevicesCount: rows.filter(d => d.is_enabled).length,
+      configured: pushEnabled,
+      publicKey: getPushPublicKey(),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.put('/push-notification', requireAuth, async (req, res) => {
+  const { action, subscription, endpoint } = req.body;
+  if (!['enable', 'disable', 'delete'].includes(action)) {
+    return res.status(400).json({ error: 'action must be enable, disable, or delete' });
+  }
+
+  try {
+    if (action === 'enable') {
+      if (!pushEnabled) {
+        return res.status(503).json({ error: 'Push notifications are not configured on this server.' });
+      }
+      if (!subscription?.endpoint) {
+        return res.status(400).json({ error: 'Push subscription is required to enable notifications.' });
+      }
+      await upsertPushSubscription(req.userId, subscription);
+      return res.json({ enabled: true, message: 'Device enabled successfully' });
+    }
+
+    if (action === 'disable') {
+      if (!endpoint) return res.status(400).json({ error: 'Endpoint is required to disable a device.' });
+      await setPushSubscriptionEnabled(req.userId, endpoint, false);
+      return res.json({ enabled: false, message: 'Device disabled successfully' });
+    }
+
+    if (action === 'delete') {
+      if (!endpoint) return res.status(400).json({ error: 'Endpoint is required to delete a device.' });
+      await deletePushSubscription(req.userId, endpoint);
+      return res.json({ deleted: true, message: 'Device registration removed' });
+    }
+  } catch (err) {
+    console.error(err);
+    const status = err.message.includes('Maximum of 3') ? 409 : 500;
+    res.status(status).json({ error: err.message || 'Server error' });
   }
 });
 

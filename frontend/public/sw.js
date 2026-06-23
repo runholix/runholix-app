@@ -44,7 +44,9 @@ self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(
-      keys.filter(key => key !== CACHE_NAME && !key.startsWith(PRIVATE_CACHE_PREFIX)).map(key => caches.delete(key))
+        keys
+            .filter(key => key !== CACHE_NAME && key !== PRIVATE_CACHE_NAME)
+            .map(key => caches.delete(key))
     );
     await self.clients.claim();
   })());
@@ -54,6 +56,44 @@ self.addEventListener('message', event => {
   if (event.data?.type === 'CLEAR_PRIVATE_CACHE') {
     event.waitUntil(clearPrivateCache());
   }
+});
+
+self.addEventListener('push', event => {
+  event.waitUntil((async () => {
+    let payload = {};
+    try {
+      payload = event.data ? event.data.json() : {};
+    } catch {
+      payload = {};
+    }
+    const title = payload.title || 'Runholix reminder';
+    const options = {
+      body: payload.body || '',
+      icon: '/icon.png',
+      badge: '/icon.png',
+      tag: payload.tag || undefined,
+      data: { url: payload.url || '/' },
+    };
+    await self.registration.showNotification(title, options);
+  })());
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      if ('focus' in client) {
+        await client.focus();
+        if ('navigate' in client) {
+          await client.navigate(targetUrl);
+        }
+        return;
+      }
+    }
+    await self.clients.openWindow(targetUrl);
+  })());
 });
 
 self.addEventListener('fetch', event => {

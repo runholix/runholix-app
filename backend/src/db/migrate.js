@@ -162,6 +162,16 @@ CREATE TABLE IF NOT EXISTS passkey_challenges (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  subscription JSONB NOT NULL,
+  is_enabled BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_training_user ON training_plans(user_id);
 CREATE INDEX IF NOT EXISTS idx_training_date  ON training_plans(plan_date);
 CREATE INDEX IF NOT EXISTS idx_races_user_id  ON races(user_id);
@@ -180,6 +190,8 @@ CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
 CREATE INDEX IF NOT EXISTS idx_passkey_challenges_lookup ON passkey_challenges(challenge, type);
 CREATE INDEX IF NOT EXISTS idx_passkey_challenges_user_lookup ON passkey_challenges(user_id, type);
 CREATE INDEX IF NOT EXISTS idx_passkey_challenges_email_lookup ON passkey_challenges(email, type);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_device_lookup ON push_subscriptions(endpoint);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_last_sent_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_sent_count_24h INTEGER NOT NULL DEFAULT 0;
@@ -188,6 +200,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_last_sent_at TIMESTAMPTZ
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_sent_count_24h INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_sent_window_start TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN DEFAULT true;
 `;
 
 async function migrate({ closePool = false } = {}) {

@@ -10,6 +10,17 @@ import {
   sendFillRpcReminder,
   sendFillResultsReminder,
 } from './email.js';
+import {
+  pushEnabled,
+  sendPushToUser,
+  buildRegistrationReminderPush,
+  buildRegistrationFollowupPush,
+  buildRaceDayPush,
+  buildRpcReminderPush,
+  buildRpcEndReminderPush,
+  buildFillRpcReminderPush,
+  buildFillResultsReminderPush,
+} from './push.js';
 
 const DEFAULT_TZ = process.env.APP_TIMEZONE || 'UTC';
 let schedulerRunning = false;
@@ -112,7 +123,7 @@ async function runWithConcurrency(tasks, concurrency = 3) {
 }
 
 async function runReminders() {
-  if (!emailEnabled) return;
+  if (!emailEnabled && !pushEnabled) return;
   if (schedulerRunning) {
     console.log('[scheduler] Skipping run - previous execution still in progress');
     return;
@@ -122,7 +133,12 @@ async function runReminders() {
   const now = new Date();
   console.log(`[scheduler] Running reminders - ${now.toISOString()}`);
 
-  const totals = { race: 0, rpc: 0, rpcEnd: 0, fillRpc7: 0, fillRpc3: 0, fillResults: 0, regD1: 0, regT1h: 0, regD3: 0 };
+  const totals = {
+    race: 0, rpc: 0, rpcEnd: 0, fillRpc7: 0, fillRpc3: 0, fillResults: 0,
+    regD1: 0, regT1h: 0, regD3: 0,
+    pushRace: 0, pushRpc: 0, pushRpcEnd: 0, pushFillRpc7: 0, pushFillRpc3: 0, pushFillResults: 0,
+    pushRegD1: 0, pushRegT1h: 0, pushRegD3: 0,
+  };
   const sendJobs = [];
   const updateBuckets = {
     registration_reminder_d1_sent_at: new Set(),
@@ -149,14 +165,15 @@ async function runReminders() {
              r.timezone, r.flag_off_time, r.cutoff_time, r.city, r.country,
              r.registration_reminder_d1_sent_at,
              r.registration_reminder_t1h_sent_at, r.registration_reminder_d3_sent_at,
-             u.email AS user_email, u.name AS user_name,
+             u.id AS user_id, u.email AS user_email, u.name AS user_name,
+             u.email_reminder_enabled,
              COALESCE(NULLIF(r.timezone, ''), NULLIF(u.timezone, ''), $1) AS effective_timezone
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE r.status = 'upcoming'
         AND r.registration_datetime IS NOT NULL
         AND u.is_active = TRUE
-        AND u.email_reminder_enabled = TRUE
+        AND (u.email_reminder_enabled = TRUE OR EXISTS (SELECT 1 FROM push_subscriptions WHERE user_id = u.id AND is_enabled = true))
         AND (
           r.registration_reminder_d1_sent_at IS NULL
           OR r.registration_reminder_t1h_sent_at IS NULL
@@ -179,8 +196,19 @@ async function runReminders() {
       // ── 1. D-1: Race registration starts tomorrow ──────────────────────
       if (localToday === regD1 && !row.registration_reminder_d1_sent_at) {
         sendJobs.push(async () => {
-          const sent = await withRetry(() => sendRegistrationReminder(row.user_email, row.user_name, row, 'd1'), `registration d1 ${row.id}`);
-          if (sent === null) return;
+          let delivered = false;
+          if (emailEnabled && row.email_reminder_enabled) {
+            const sent = await withRetry(() => sendRegistrationReminder(row.user_email, row.user_name, row, 'd1'), `registration d1 ${row.id}`);
+            if (sent !== null) delivered = true;
+          }
+          if (pushEnabled) {
+            const { sent } = await sendPushToUser(row.user_id, buildRegistrationReminderPush(row, 'd1'));
+            if (sent > 0) {
+              delivered = true;
+              totals.pushRegD1 += 1;
+            }
+          }
+          if (!delivered) return;
           updateBuckets.registration_reminder_d1_sent_at.add(row.id);
           totals.regD1 += 1;
         });
@@ -191,8 +219,19 @@ async function runReminders() {
         const oneHourBefore = localRegUtc - (60 * 60 * 1000);
         if (Math.abs(now.getTime() - oneHourBefore) < 60 * 1000 && !row.registration_reminder_t1h_sent_at) {
           sendJobs.push(async () => {
-            const sent = await withRetry(() => sendRegistrationReminder(row.user_email, row.user_name, row, 't1h'), `registration t1h ${row.id}`);
-            if (sent === null) return;
+            let delivered = false;
+            if (emailEnabled && row.email_reminder_enabled) {
+              const sent = await withRetry(() => sendRegistrationReminder(row.user_email, row.user_name, row, 't1h'), `registration t1h ${row.id}`);
+              if (sent !== null) delivered = true;
+            }
+            if (pushEnabled) {
+              const { sent } = await sendPushToUser(row.user_id, buildRegistrationReminderPush(row, 't1h'));
+              if (sent > 0) {
+                delivered = true;
+                totals.pushRegT1h += 1;
+              }
+            }
+            if (!delivered) return;
             updateBuckets.registration_reminder_t1h_sent_at.add(row.id);
             totals.regT1h += 1;
           });
@@ -202,8 +241,19 @@ async function runReminders() {
       // ── 3. D+3: Race registration was 3 days ago, status still upcoming ──────────────────────
       if (localToday === regD3 && !row.registration_reminder_d3_sent_at) {
         sendJobs.push(async () => {
-          const sent = await withRetry(() => sendRegistrationFollowup(row.user_email, row.user_name, row), `registration d3 ${row.id}`);
-          if (sent === null) return;
+          let delivered = false;
+          if (emailEnabled && row.email_reminder_enabled) {
+            const sent = await withRetry(() => sendRegistrationFollowup(row.user_email, row.user_name, row), `registration d3 ${row.id}`);
+            if (sent !== null) delivered = true;
+          }
+          if (pushEnabled) {
+            const { sent } = await sendPushToUser(row.user_id, buildRegistrationFollowupPush(row));
+            if (sent > 0) {
+              delivered = true;
+              totals.pushRegD3 += 1;
+            }
+          }
+          if (!delivered) return;
           updateBuckets.registration_reminder_d3_sent_at.add(row.id);
           totals.regD3 += 1;
         });
@@ -243,12 +293,14 @@ async function runReminders() {
         r.fill_rpc3_reminder_sent_at,
         r.fill_results_reminder_sent_at,
         COALESCE(NULLIF(r.timezone, ''), NULLIF(u.timezone, ''), $1) AS effective_timezone,
+        u.id AS user_id,
         u.email,
-        u.name
+        u.name,
+        u.email_reminder_enabled
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE u.is_active = TRUE
-        AND u.email_reminder_enabled = TRUE
+        AND (u.email_reminder_enabled = TRUE OR EXISTS (SELECT 1 FROM push_subscriptions WHERE user_id = u.id AND is_enabled = true))
         AND (
           (r.race_date = $2 AND r.status IN ('registered', 'upcoming') AND r.race_day_reminder_sent_at IS NULL)
           OR (r.rpc_date_start = $2 AND r.status IN ('registered', 'upcoming') AND r.rpc_reminder_sent_at IS NULL)
@@ -265,8 +317,19 @@ async function runReminders() {
       // ── 4. D-1: Race day tomorrow ─────────────────────────────────────────
       if (row.race_date === tomorrow && ['registered', 'upcoming'].includes(row.status) && !row.race_day_reminder_sent_at) {
         sendJobs.push(async () => {
-          const sent = await withRetry(() => sendRaceReminder(row.email, row.name, payload), `race reminder ${row.id}`);
-          if (sent === null) return;
+          let delivered = false;
+          if (emailEnabled && row.email_reminder_enabled) {
+            const sent = await withRetry(() => sendRaceReminder(row.email, row.name, payload), `race reminder ${row.id}`);
+            if (sent !== null) delivered = true;
+          }
+          if (pushEnabled) {
+            const { sent } = await sendPushToUser(row.user_id, buildRaceDayPush(payload));
+            if (sent > 0) {
+              delivered = true;
+              totals.pushRace += 1;
+            }
+          }
+          if (!delivered) return;
           updateBuckets.race_day_reminder_sent_at.add(row.id);
           totals.race += 1;
         });
@@ -275,8 +338,19 @@ async function runReminders() {
       // ── 5. D-1: Race pack collection starts tomorrow ──────────────────────
       if (row.rpc_date_start === tomorrow && ['registered', 'upcoming'].includes(row.status) && !row.rpc_reminder_sent_at) {
         sendJobs.push(async () => {
-          const sent = await withRetry(() => sendRpcReminder(row.email, row.name, payload), `rpc reminder ${row.id}`);
-          if (sent === null) return;
+          let delivered = false;
+          if (emailEnabled && row.email_reminder_enabled) {
+            const sent = await withRetry(() => sendRpcReminder(row.email, row.name, payload), `rpc reminder ${row.id}`);
+            if (sent !== null) delivered = true;
+          }
+          if (pushEnabled) {
+            const { sent } = await sendPushToUser(row.user_id, buildRpcReminderPush(payload));
+            if (sent > 0) {
+              delivered = true;
+              totals.pushRpc += 1;
+            }
+          }
+          if (!delivered) return;
           updateBuckets.rpc_reminder_sent_at.add(row.id);
           totals.rpc += 1;
         });
@@ -285,8 +359,19 @@ async function runReminders() {
       // ── 6. D day: Race pack collection ends today, RPC status still not collected ──────────────────────
       if (row.rpc_date_end === today && ['registered', 'upcoming'].includes(row.status) && row.rpc_status === 'not_collected' && !row.rpc_end_reminder_sent_at) {
         sendJobs.push(async () => {
-          const sent = await withRetry(() => sendRpcEndReminder(row.email, row.name, payload), `rpc end reminder ${row.id}`);
-          if (sent === null) return;
+          let delivered = false;
+          if (emailEnabled && row.email_reminder_enabled) {
+            const sent = await withRetry(() => sendRpcEndReminder(row.email, row.name, payload), `rpc end reminder ${row.id}`);
+            if (sent !== null) delivered = true;
+          }
+          if (pushEnabled) {
+            const { sent } = await sendPushToUser(row.user_id, buildRpcEndReminderPush(payload));
+            if (sent > 0) {
+              delivered = true;
+              totals.pushRpcEnd += 1;
+            }
+          }
+          if (!delivered) return;
           updateBuckets.rpc_end_reminder_sent_at.add(row.id);
           totals.rpcEnd += 1;
         });
@@ -295,8 +380,19 @@ async function runReminders() {
       // ── 7. D-7: Race in 7 days but no RPC details yet ─────────────────────
       if (row.race_date === in7days && ['registered', 'upcoming'].includes(row.status) && !row.rpc_date_start && !row.fill_rpc7_reminder_sent_at) {
         sendJobs.push(async () => {
-          const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 7), `fill rpc 7 ${row.id}`);
-          if (sent === null) return;
+          let delivered = false;
+          if (emailEnabled && row.email_reminder_enabled) {
+            const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 7), `fill rpc 7 ${row.id}`);
+            if (sent !== null) delivered = true;
+          }
+          if (pushEnabled) {
+            const { sent } = await sendPushToUser(row.user_id, buildFillRpcReminderPush(payload, 7));
+            if (sent > 0) {
+              delivered = true;
+              totals.pushFillRpc7 += 1;
+            }
+          }
+          if (!delivered) return;
           updateBuckets.fill_rpc7_reminder_sent_at.add(row.id);
           totals.fillRpc7 += 1;
         });
@@ -305,8 +401,19 @@ async function runReminders() {
       // ── 8. D-3: Race in 3 days but still no RPC details ───────────────────
       if (row.race_date === in3days && ['registered', 'upcoming'].includes(row.status) && !row.rpc_date_start && !row.fill_rpc3_reminder_sent_at) {
         sendJobs.push(async () => {
-          const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 3), `fill rpc 3 ${row.id}`);
-          if (sent === null) return;
+          let delivered = false;
+          if (emailEnabled && row.email_reminder_enabled) {
+            const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 3), `fill rpc 3 ${row.id}`);
+            if (sent !== null) delivered = true;
+          }
+          if (pushEnabled) {
+            const { sent } = await sendPushToUser(row.user_id, buildFillRpcReminderPush(payload, 3));
+            if (sent > 0) {
+              delivered = true;
+              totals.pushFillRpc3 += 1;
+            }
+          }
+          if (!delivered) return;
           updateBuckets.fill_rpc3_reminder_sent_at.add(row.id);
           totals.fillRpc3 += 1;
         });
@@ -315,8 +422,19 @@ async function runReminders() {
       // ── 9. D+3: Race was 3 days ago, status still registered/upcoming ─────
       if (row.race_date === minus3 && ['registered', 'upcoming'].includes(row.status) && !row.fill_results_reminder_sent_at) {
         sendJobs.push(async () => {
-          const sent = await withRetry(() => sendFillResultsReminder(row.email, row.name, payload), `fill results ${row.id}`);
-          if (sent === null) return;
+          let delivered = false;
+          if (emailEnabled && row.email_reminder_enabled) {
+            const sent = await withRetry(() => sendFillResultsReminder(row.email, row.name, payload), `fill results ${row.id}`);
+            if (sent !== null) delivered = true;
+          }
+          if (pushEnabled) {
+            const { sent } = await sendPushToUser(row.user_id, buildFillResultsReminderPush(payload));
+            if (sent > 0) {
+              delivered = true;
+              totals.pushFillResults += 1;
+            }
+          }
+          if (!delivered) return;
           updateBuckets.fill_results_reminder_sent_at.add(row.id);
           totals.fillResults += 1;
         });
@@ -330,7 +448,10 @@ async function runReminders() {
     console.log(
       `[scheduler] Done - reg-d1:${totals.regD1} reg-t1h:${totals.regT1h} reg-d3:${totals.regD3} ` +
       `race:${totals.race} rpc:${totals.rpc} rpc-end:${totals.rpcEnd} fill-rpc-7:${totals.fillRpc7} ` +
-      `fill-rpc-3:${totals.fillRpc3} fill-results:${totals.fillResults}`
+      `fill-rpc-3:${totals.fillRpc3} fill-results:${totals.fillResults} ` +
+      `push-reg-d1:${totals.pushRegD1} push-reg-t1h:${totals.pushRegT1h} push-reg-d3:${totals.pushRegD3} ` +
+      `push-race:${totals.pushRace} push-rpc:${totals.pushRpc} push-rpc-end:${totals.pushRpcEnd} ` +
+      `push-fill-rpc-7:${totals.pushFillRpc7} push-fill-rpc-3:${totals.pushFillRpc3} push-fill-results:${totals.pushFillResults}`
     );
   } catch (err) {
     console.error('[scheduler] Error:', err.message);
@@ -340,8 +461,8 @@ async function runReminders() {
 }
 
 export function startScheduler() {
-  if (!emailEnabled) {
-    console.log('[scheduler] Email disabled - scheduler not started');
+  if (!emailEnabled && !pushEnabled) {
+    console.log('[scheduler] Email and push disabled - scheduler not started');
     return;
   }
   cron.schedule('0,30 * * * *', runReminders);

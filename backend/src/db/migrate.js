@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   endpoint TEXT NOT NULL UNIQUE,
   subscription JSONB NOT NULL,
   is_enabled BOOLEAN DEFAULT true,
+  device_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -202,6 +203,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_sent_window_start TIMEST
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN DEFAULT true;
+ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS device_name TEXT;
 `;
 
 async function migrate({ closePool = false } = {}) {

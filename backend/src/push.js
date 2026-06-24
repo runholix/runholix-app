@@ -16,7 +16,7 @@ export function getPushPublicKey() {
   return publicKey || null;
 }
 
-export async function upsertPushSubscription(userId, subscription) {
+export async function upsertPushSubscription(userId, subscription, deviceName = null) {
   if (!subscription?.endpoint) throw new Error('Invalid push subscription');
 
   // 1. Check if this specific endpoint already exists and if it's currently enabled
@@ -43,18 +43,19 @@ export async function upsertPushSubscription(userId, subscription) {
 
   // UPDATED: Added 'is_enabled' to the INSERT/UPDATE query
   await pool.query(
-    `INSERT INTO push_subscriptions (user_id, endpoint, subscription, is_enabled, updated_at)
-     VALUES ($1, $2, $3, true, NOW())
-     ON CONFLICT (endpoint)
+      `INSERT INTO push_subscriptions (user_id, endpoint, subscription, is_enabled, device_name, updated_at)
+       VALUES ($1, $2, $3, true, $4, NOW())
+         ON CONFLICT (endpoint)
        DO UPDATE SET user_id = EXCLUDED.user_id,
-         subscription = CASE
-            WHEN EXCLUDED.subscription->'keys' IS NOT NULL
-              THEN EXCLUDED.subscription
-            ELSE push_subscriptions.subscription
-           END,
+                     subscription = CASE
+                     WHEN EXCLUDED.subscription->'keys' IS NOT NULL
+                     THEN EXCLUDED.subscription
+                     ELSE push_subscriptions.subscription
+      END,
          is_enabled = true,
+         device_name = COALESCE(EXCLUDED.device_name, push_subscriptions.device_name),
          updated_at = NOW()`,
-    [userId, subscription.endpoint, subscription]
+      [userId, subscription.endpoint, subscription, deviceName]
   );
 }
 

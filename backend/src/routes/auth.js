@@ -945,7 +945,7 @@ router.put('/email-reminder', requireAuth, async (req, res) => {
 router.get('/push-notification', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-        'SELECT endpoint, is_enabled FROM push_subscriptions WHERE user_id=$1 ORDER BY updated_at DESC',
+        'SELECT endpoint, is_enabled, device_name FROM push_subscriptions WHERE user_id=$1 ORDER BY updated_at DESC',
         [req.userId]
     );
 
@@ -962,7 +962,7 @@ router.get('/push-notification', requireAuth, async (req, res) => {
 });
 
 router.put('/push-notification', requireAuth, async (req, res) => {
-  const { action, subscription, endpoint } = req.body;
+  const { action, subscription, endpoint, deviceName } = req.body;
   if (!['enable', 'disable', 'delete'].includes(action)) {
     return res.status(400).json({ error: 'action must be enable, disable, or delete' });
   }
@@ -975,7 +975,7 @@ router.put('/push-notification', requireAuth, async (req, res) => {
       if (!subscription?.endpoint) {
         return res.status(400).json({ error: 'Push subscription is required to enable notifications.' });
       }
-      await upsertPushSubscription(req.userId, subscription);
+      await upsertPushSubscription(req.userId, subscription, deviceName || null);
       return res.json({ enabled: true, message: 'Device enabled successfully' });
     }
 

@@ -3,6 +3,41 @@ import pool from '../db/pool.js';
 
 const router = Router();
 
+// Rate limiting state and configuration
+const authAttempts = new Map();
+const INVALID_TOKEN_1M_LIMIT = 5;
+const INVALID_TOKEN_24H_LIMIT = 100;
+const VALID_TOKEN_1M_LIMIT = 10;
+
+// Cleanup task: Remove expired rate-limit buckets every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of authAttempts.entries()) {
+    if (bucket.resetAt <= now) {
+      authAttempts.delete(key);
+    }
+  }
+}, 10 * 60 * 1000);
+
+/**
+ * Helper to track and check rate limits
+ * @returns {boolean} False if limit exceeded, True if allowed
+ */
+function checkRateLimit(req, key, max, windowMs) {
+  const now = Date.now();
+  const bucketKey = `${req.ip}:${key}`;
+  let bucket = authAttempts.get(bucketKey);
+
+  if (!bucket || bucket.resetAt <= now) {
+    bucket = { count: 0, resetAt: now + windowMs };
+  }
+
+  bucket.count += 1;
+  authAttempts.set(bucketKey, bucket);
+
+  return bucket.count <= max;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 function esc(str) {
   // RFC 5545 text escaping: \ ; , \n
@@ -182,17 +217,27 @@ function buildIcs(userId, userName, races, training) {
 // Calendar clients subscribe to this URL and poll it automatically.
 router.get('/:token.ics', async (req, res) => {
   try {
-    const now = new Date();
-    const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, now.getUTCDate()));
-    const windowEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 6, now.getUTCDate()));
-    const windowStartDate = windowStart.toISOString().slice(0, 10);
-    const windowEndDate = windowEnd.toISOString().slice(0, 10);
-
     const { rows: users } = await pool.query(
       'SELECT id, name FROM users WHERE ical_token = $1 AND ical_enabled = TRUE',
       [req.params.token]
     );
-    if (!users.length) return res.status(404).send('Calendar feed not found or disabled.');
+
+    if (!users.length) {
+      // Token is invalid or disabled
+      const allowed1m = checkRateLimit(req, 'ical-invalid-1m', INVALID_TOKEN_1M_LIMIT, 60 * 1000);
+      const allowed24h = checkRateLimit(req, 'ical-invalid-24h', INVALID_TOKEN_24H_LIMIT, 24 * 60 * 60 * 1000);
+
+      if (!allowed1m || !allowed24h) {
+        return res.status(429).json({ error: 'Too many requests.' });
+      }
+      return res.status(404).send('Calendar feed not found or disabled.');
+    }
+
+    // Token is valid - check the 1-minute limit for successful users
+    const allowedValid = checkRateLimit(req, 'ical-valid-1m', VALID_TOKEN_1M_LIMIT, 60 * 1000);
+    if (!allowedValid) {
+      return res.status(429).json({ error: 'Too many requests.' });
+    }
 
     const { id: userId, name } = users[0];
 

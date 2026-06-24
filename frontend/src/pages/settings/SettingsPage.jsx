@@ -8,6 +8,7 @@ import PasskeySection from "./PasskeySection.jsx";
 import CalendarFeedSection from "./CalendarFeedSection.jsx";
 import TimezoneSection from "./TimezoneSection.jsx";
 import PushNotificationSection from "./PushNotificationSection.jsx";
+import {APP_VERSION} from "../../lib/version.js";
 
 // ── Generic section card ───────────────────────────────────────────────────
 export function Section({ title, description, children }) {
@@ -47,6 +48,12 @@ export default function SettingsPage() {
       <PasswordSection />
       <PasskeySection />
       <CalendarFeedSection />
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'center', margin: "25px 0 10px" }}>
+          Runholix v{APP_VERSION}<br/>
+          <a href="https://github.com/runholix/runholix-app" target="_blank">
+              <i className="ti ti-brand-github" /> GitHub
+          </a>
+      </div>
     </div>
   );
 }

@@ -39,6 +39,16 @@ const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_WINDOW_MS = 60 * 1000;
 const authAttempts = new Map();
 
+// Cleanup task: Remove expired rate-limit buckets every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of authAttempts.entries()) {
+    if (bucket.resetAt <= now) {
+      authAttempts.delete(key);
+    }
+  }
+}, 10 * 60 * 1000); // Runs every 10 minutes
+
 function setAuthCookie(res, token) {
   const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true';
   const sameSite = process.env.COOKIE_SAMESITE || 'lax';
@@ -57,8 +67,7 @@ function authRateLimit(req, res, key, max = 10, windowMs = 10 * 60 * 1000) {
   const bucketKey = `${req.ip}:${key}`;
   const bucket = authAttempts.get(bucketKey) || { count: 0, resetAt: now + windowMs };
   if (bucket.resetAt <= now) {
-    bucket.count = 0;
-    bucket.resetAt = now + windowMs;
+    authAttempts.delete(bucketKey);
   }
   bucket.count += 1;
   authAttempts.set(bucketKey, bucket);
@@ -161,6 +170,16 @@ router.post('/register', async (req, res) => {
   if (!email || !password || !name) {
     return res.status(400).json({ error: 'All fields required' });
   }
+  const registerKey = `${req.ip}:register:${String(email).toLowerCase().trim()}`;
+  const now_r = Date.now();
+  const registerBucket = authAttempts.get(registerKey) || { count: 0, resetAt: now_r + LOGIN_FAILURE_WINDOW_MS };
+  if (registerBucket.resetAt <= now_r) {
+    authAttempts.delete(registerKey);
+  }
+  if (registerBucket.count >= LOGIN_FAILURE_LIMIT) {
+    authAttempts.set(registerKey, registerBucket);
+    return res.status(429).json({ error: 'Too many requests.' });
+  }
   try {
     const hash = await bcrypt.hash(password, 12);
 
@@ -199,7 +218,14 @@ router.post('/register', async (req, res) => {
       return res.status(201).json({ token, user: rows[0] });
     }
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
+    if (err.code === '23505') {
+      registerBucket.count += 1;
+      authAttempts.set(registerKey, registerBucket);
+      if (registerBucket.count >= LOGIN_FAILURE_LIMIT) {
+        return res.status(429).json({ error: 'Too many requests.' });
+      }
+      return res.status(409).json({ error: 'Email already registered' });
+    }
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
@@ -509,8 +535,7 @@ router.post('/login', async (req, res) => {
   const now = Date.now();
   const bucket = authAttempts.get(loginKey) || { count: 0, resetAt: now + LOGIN_FAILURE_WINDOW_MS };
   if (bucket.resetAt <= now) {
-    bucket.count = 0;
-    bucket.resetAt = now + LOGIN_FAILURE_WINDOW_MS;
+    authAttempts.delete(loginKey);
   }
   if (bucket.count >= LOGIN_FAILURE_LIMIT) {
     authAttempts.set(loginKey, bucket);
@@ -814,6 +839,17 @@ router.put('/email', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'new_email and password are required' });
 
   const normalized = new_email.toLowerCase().trim();
+  const emailKey = `${req.ip}:email-change:${req.userId}`;
+  const now_e = Date.now();
+  const emailBucket = authAttempts.get(emailKey) || { count: 0, resetAt: now_e + LOGIN_FAILURE_WINDOW_MS };
+  if (emailBucket.resetAt <= now_e) {
+    authAttempts.delete(emailBucket);
+  }
+  if (emailBucket.count >= LOGIN_FAILURE_LIMIT) {
+    authAttempts.set(emailKey, emailBucket);
+    return res.status(429).json({ error: 'Too many requests.' });
+  }
+
   let client;
   try {
     client = await pool.connect();
@@ -826,13 +862,27 @@ router.put('/email', requireAuth, async (req, res) => {
 
     // Verify password
     const ok = await bcrypt.compare(password, rows[0].password_hash);
-    if (!ok) return res.status(401).json({ error: 'Password is incorrect' });
+    if (!ok) {
+      emailBucket.count += 1;
+      authAttempts.set(emailKey, emailBucket);
+      if (emailBucket.count >= LOGIN_FAILURE_LIMIT) {
+        return res.status(429).json({ error: 'Too many requests.' });
+      }
+      return res.status(401).json({ error: 'Password is incorrect' });
+    }
 
     // Check new email not already taken
     const { rows: existing } = await pool.query(
       'SELECT id FROM users WHERE email=$1 AND id!=$2', [normalized, req.userId]
     );
-    if (existing.length) return res.status(409).json({ error: 'Email already in use' });
+    if (existing.length) {
+      emailBucket.count += 1;
+      authAttempts.set(emailKey, emailBucket);
+      if (emailBucket.count >= LOGIN_FAILURE_LIMIT) {
+        return res.status(429).json({ error: 'Too many requests.' });
+      }
+      return res.status(409).json({ error: 'Email already in use' });
+    }
 
     if (normalized === rows[0].email)
       return res.status(400).json({ error: 'New email is the same as current email' });

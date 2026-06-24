@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import {useEffect, useState} from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useAuth } from '../../hooks/useAuth.jsx';
@@ -14,6 +14,23 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [canRegister, setCanRegister] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getRegister();
+      setCanRegister(data.status);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   // Read the intended destination from ?redirect=
   const params = new URLSearchParams(location.search);
@@ -102,7 +119,9 @@ export default function LoginPage() {
 
         <p style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', flexDirection: 'column' }}>
           <Link to="/forgot-password" style={{ color: 'var(--color-primary)', fontWeight: 500 }}>Forgot password?</Link>
-          <span>No account? <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: 500 }}>Register</Link></span>
+          {canRegister && (
+              <span>No account? <Link to="/register" style={{ color: 'var(--color-primary)', fontWeight: 500 }}>Register</Link></span>
+          )}
         </p>
       </div>
     </div>

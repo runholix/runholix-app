@@ -39,6 +39,8 @@ const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_WINDOW_MS = 60 * 1000;
 const authAttempts = new Map();
 
+const STOP_REGISTRATION = process.env.STOP_REGISTRATION === 'true'
+
 // Cleanup task: Remove expired rate-limit buckets every 10 minutes
 setInterval(() => {
   const now = Date.now();
@@ -165,7 +167,13 @@ async function verifyCurrentPassword(userId, password) {
 }
 
 // ── REGISTER ──────────────────────────────────────────────────────────────
+router.get('/register', async (req, res) => {
+  return res.status(200).json({ status: !STOP_REGISTRATION });
+});
+
 router.post('/register', async (req, res) => {
+  if (STOP_REGISTRATION) return res.status(403).json({ error: 'Currently, the server does not accept new account registration. Contact server admin for more info.' });
+
   const { email, password, name } = req.body;
   if (!email || !password || !name) {
     return res.status(400).json({ error: 'All fields required' });

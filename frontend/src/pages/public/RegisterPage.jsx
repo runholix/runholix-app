@@ -34,8 +34,23 @@ export default function RegisterPage() {
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [remainingResends, setRemainingResends] = useState(3);
   const [now, setNow] = useState(Date.now());
+  const [canRegister, setCanRegister] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getRegister();
+      setCanRegister(data.status);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   useEffect(() => {
+    load();
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -161,31 +176,35 @@ export default function RegisterPage() {
 
         {error && <div className="alert-error">{error}</div>}
 
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="form-group">
-            <label className="form-label">Full name <RequiredMarker /></label>
-            <input placeholder="Your name" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Email <RequiredMarker /></label>
-            <input type="email" placeholder="you@example.com" value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Password <RequiredMarker /></label>
-            <input type="password" placeholder="Min 8 characters" value={form.password}
-              onChange={e => setForm(f => ({ ...f, password: e.target.value }))} minLength={8} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Confirm Password <RequiredMarker /></label>
-            <input type="password" placeholder="Repeat password" value={form.confirmPassword}
-                   onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} required />
-          </div>
-          <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center', marginTop: 4 }} disabled={loading}>
-            {loading ? 'Creating account…' : 'Create account'}
-          </button>
-        </form>
+        {canRegister ? (
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="form-group">
+              <label className="form-label">Full name <RequiredMarker /></label>
+              <input placeholder="Your name" value={form.name}
+                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Email <RequiredMarker /></label>
+              <input type="email" placeholder="you@example.com" value={form.email}
+                     onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Password <RequiredMarker /></label>
+              <input type="password" placeholder="Min 8 characters" value={form.password}
+                     onChange={e => setForm(f => ({ ...f, password: e.target.value }))} minLength={8} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Confirm Password <RequiredMarker /></label>
+              <input type="password" placeholder="Repeat password" value={form.confirmPassword}
+                     onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} required />
+            </div>
+            <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center', marginTop: 4 }} disabled={loading}>
+              {loading ? 'Creating account…' : 'Create account'}
+            </button>
+          </form>
+        ) : (
+          <div className="alert-error">Currently, the server does not accept new account registration. Contact server admin for more info.</div>
+        )}
 
         <p style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>
           Already have an account? <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 500 }}>Sign in</Link>

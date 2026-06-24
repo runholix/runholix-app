@@ -240,6 +240,11 @@ router.get('/:token.ics', async (req, res) => {
     }
 
     const { id: userId, name } = users[0];
+    const now = new Date();
+    const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, now.getUTCDate()));
+    const windowEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 6, now.getUTCDate()));
+    const windowStartDate = windowStart.toISOString().slice(0, 10);
+    const windowEndDate = windowEnd.toISOString().slice(0, 10);
 
     // Fetch all races — cast date columns to text so .slice() is safe
     const { rows: races } = await pool.query(

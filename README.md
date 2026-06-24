@@ -103,6 +103,7 @@ The root `.env.example` is the best source of truth. The key variables are:
 | `VAPID_PUBLIC_KEY` | backend | Web push notification to encrypt the payload |
 | `VAPID_PRIVATE_KEY` | backend | Web push notification to sign identity |
 | `VAPID_SUBJECT` | backend | A contact URL or email to contact the server administrator if there are configuration issues or abuse |
+| `STOP_REGISTRATION` | backend | Option to stop new account registration, default to false |
 
 ## API Endpoints
 

@@ -166,6 +166,7 @@ async function uploadFile(endpoint, file) {
 
 export const api = {
   // ── Auth ──────────────────────────────────────────────────────────────
+  getRegister:      () => request('/auth/register'),
   register:         (body) => request('/auth/register',          { method: 'POST', body: JSON.stringify(body) }),
   activate:         (body) => request('/auth/activate',          { method: 'POST', body: JSON.stringify(body) }),
   resendActivation: (body) => request('/auth/resend-activation', { method: 'POST', body: JSON.stringify(body) }),

@@ -14,9 +14,10 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile
+    image: ghcr.io/runholix/runholix-backend:latest
     container_name: runholix-api
     restart: unless-stopped
     depends_on:
@@ -33,12 +34,13 @@ services:
       - uploads_data:/uploads
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-/api}
-        VITE_APP_NAME: ${APP_NAME:-Runholix}
+    # build:
+    #   context: ./frontend
+    #   dockerfile: Dockerfile
+    #   args:
+    #     VITE_API_URL: ${VITE_API_URL:-/api}
+    #     VITE_APP_NAME: ${APP_NAME:-Runholix}
+    image: ghcr.io/runholix/runholix-frontend:latest
     container_name: runholix-web
     restart: unless-stopped
     depends_on:

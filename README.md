@@ -12,7 +12,8 @@ Runholix is a self-hosted race log and training tracker for runners. It stores r
 - Race detail and race add/edit views with tabbed layout
 - Dashboard with summary stats, yearly chart, and personal bests
 - Race list filtering, search, sorting, and pagination
-- Training log CRUD
+- Email and/or push notification reminder about race registration, race pack collection and race day
+- Training plan CRUD
 - Uploads for race routes, race results, attachments, and avatar images
 - Public avatar display and public `.ics` calendar feed
 - Passkey sign-in and passkey registration
@@ -99,6 +100,9 @@ The root `.env.example` is the best source of truth. The key variables are:
 | `SMTP_POOL` | backend | Enable or disable SMTP connection pooling |
 | `SMTP_POOL_MAX_CONNECTIONS` | backend | SMTP pool size |
 | `SMTP_POOL_MAX_MESSAGES` | backend | Max messages per pooled SMTP connection |
+| `VAPID_PUBLIC_KEY` | backend | Web push notification to encrypt the payload |
+| `VAPID_PRIVATE_KEY` | backend | Web push notification to sign identity |
+| `VAPID_SUBJECT` | backend | A contact URL or email to contact the server administrator if there are configuration issues or abuse |
 
 ## API Endpoints
 

@@ -9,7 +9,7 @@ const PRIVATE_CACHE_NAME = new URL(self.location.href).searchParams.get('v')
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',
-  '/icon.png',
+  '/dark-icon.png',
 ];
 
 function isApiRequest(url) {

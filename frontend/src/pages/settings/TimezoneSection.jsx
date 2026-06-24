@@ -28,7 +28,7 @@ export default function TimezoneSection({ user, onUpdate }) {
   };
 
   return (
-    <Section title="Timezone" description="Used for scheduling and accurate email reminder timing.">
+    <Section title="Timezone" description="Used for scheduling and accurate email/push notification race reminder timing.">
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <TimezoneSelect label="Default timezone" timezone={timezone} setTimezone={setTimezone} onFilteredChange={setFiltered} onTimezoneExistChange={setTimezoneExist} />
         <div>

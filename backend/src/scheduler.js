@@ -260,13 +260,12 @@ async function runReminders() {
       }
     }
 
-    const today = formatZonedDate(now, DEFAULT_TZ);
-    const tomorrow = addDays(today, 1);
-    const in3days = addDays(today, 3);
-    const in7days = addDays(today, 7);
-    const minus3 = addDays(today, -3);
-    if (!tomorrow || !in3days || !in7days || !minus3) throw new Error('Invalid scheduler date window');
-
+    // Widen the SQL fetch window by ±1 day around server time to cover all possible
+    // user timezones (UTC-12 to UTC+14), then do per-row per-timezone date comparisons in JS.
+    const serverToday = formatZonedDate(now, DEFAULT_TZ);
+    const windowStart = addDays(serverToday, -4); // minus3 for the most-ahead timezone
+    const windowEnd   = addDays(serverToday,  8); // in7days for the most-behind timezone
+    if (!windowStart || !windowEnd) throw new Error('Invalid scheduler date window');
 
     const { rows: reminderRows } = await pool.query(`
       SELECT
@@ -301,143 +300,139 @@ async function runReminders() {
       JOIN users u ON u.id = r.user_id
       WHERE u.is_active = TRUE
         AND (u.email_reminder_enabled = TRUE OR EXISTS (SELECT 1 FROM push_subscriptions WHERE user_id = u.id AND is_enabled = true))
+        AND r.status IN ('registered', 'upcoming')
         AND (
-          (r.race_date = $2 AND r.status IN ('registered', 'upcoming') AND r.race_day_reminder_sent_at IS NULL)
-          OR (r.rpc_date_start = $2 AND r.status IN ('registered', 'upcoming') AND r.rpc_reminder_sent_at IS NULL)
-          OR (r.rpc_date_end = $3 AND r.status IN ('registered', 'upcoming') AND r.rpc_status = 'not_collected' AND r.rpc_end_reminder_sent_at IS NULL)
-          OR (r.race_date = $4 AND r.status IN ('registered', 'upcoming') AND NULLIF(r.rpc_date_start::text, '') IS NULL AND r.fill_rpc7_reminder_sent_at IS NULL)
-          OR (r.race_date = $5 AND r.status IN ('registered', 'upcoming') AND NULLIF(r.rpc_date_start::text, '') IS NULL AND r.fill_rpc3_reminder_sent_at IS NULL)
-          OR (r.race_date = $6 AND r.status IN ('registered', 'upcoming') AND r.fill_results_reminder_sent_at IS NULL)
+        (r.race_date BETWEEN $2 AND $3 AND (r.race_day_reminder_sent_at IS NULL OR r.fill_rpc7_reminder_sent_at IS NULL OR r.fill_rpc3_reminder_sent_at IS NULL OR r.fill_results_reminder_sent_at IS NULL))
+          OR (r.rpc_date_start BETWEEN $2 AND $3 AND r.rpc_reminder_sent_at IS NULL)
+          OR (r.rpc_date_end BETWEEN $2 AND $3 AND r.rpc_status = 'not_collected' AND r.rpc_end_reminder_sent_at IS NULL)
         )
-    `, [DEFAULT_TZ, tomorrow, today, in7days, in3days, minus3]);
+    `, [DEFAULT_TZ, windowStart, windowEnd]);
 
+    // Group rows by effective timezone so we compute local dates once per zone
+    const byTz = {};
     for (const row of reminderRows) {
-      const payload = { ...row, timezone: row.effective_timezone || DEFAULT_TZ };
+      const tz = row.effective_timezone || DEFAULT_TZ;
+      (byTz[tz] ??= []).push(row);
+    }
 
-      // ── 4. D-1: Race day tomorrow ─────────────────────────────────────────
-      if (row.race_date === tomorrow && ['registered', 'upcoming'].includes(row.status) && !row.race_day_reminder_sent_at) {
-        sendJobs.push(async () => {
-          let delivered = false;
-          if (emailEnabled && row.email_reminder_enabled) {
-            const sent = await withRetry(() => sendRaceReminder(row.email, row.name, payload), `race reminder ${row.id}`);
-            if (sent !== null) delivered = true;
-          }
-          if (pushEnabled) {
-            const { sent } = await sendPushToUser(row.user_id, buildRaceDayPush(payload));
-            if (sent > 0) {
-              delivered = true;
-              totals.pushRace += 1;
-            }
-          }
-          if (!delivered) return;
-          updateBuckets.race_day_reminder_sent_at.add(row.id);
-          totals.race += 1;
-        });
-      }
+    for (const [tz, tzRows] of Object.entries(byTz)) {
+      const localToday = formatZonedDate(now, tz);
+      const tomorrow   = addDays(localToday, 1);
+      const in3days    = addDays(localToday, 3);
+      const in7days    = addDays(localToday, 7);
+      const minus3     = addDays(localToday, -3);
+      if (!tomorrow || !in3days || !in7days || !minus3) continue;
 
-      // ── 5. D-1: Race pack collection starts tomorrow ──────────────────────
-      if (row.rpc_date_start === tomorrow && ['registered', 'upcoming'].includes(row.status) && !row.rpc_reminder_sent_at) {
-        sendJobs.push(async () => {
-          let delivered = false;
-          if (emailEnabled && row.email_reminder_enabled) {
-            const sent = await withRetry(() => sendRpcReminder(row.email, row.name, payload), `rpc reminder ${row.id}`);
-            if (sent !== null) delivered = true;
-          }
-          if (pushEnabled) {
-            const { sent } = await sendPushToUser(row.user_id, buildRpcReminderPush(payload));
-            if (sent > 0) {
-              delivered = true;
-              totals.pushRpc += 1;
-            }
-          }
-          if (!delivered) return;
-          updateBuckets.rpc_reminder_sent_at.add(row.id);
-          totals.rpc += 1;
-        });
-      }
+      for (const row of tzRows) {
+        const payload = { ...row, timezone: tz };
 
-      // ── 6. D day: Race pack collection ends today, RPC status still not collected ──────────────────────
-      if (row.rpc_date_end === today && ['registered', 'upcoming'].includes(row.status) && row.rpc_status === 'not_collected' && !row.rpc_end_reminder_sent_at) {
-        sendJobs.push(async () => {
-          let delivered = false;
-          if (emailEnabled && row.email_reminder_enabled) {
-            const sent = await withRetry(() => sendRpcEndReminder(row.email, row.name, payload), `rpc end reminder ${row.id}`);
-            if (sent !== null) delivered = true;
-          }
-          if (pushEnabled) {
-            const { sent } = await sendPushToUser(row.user_id, buildRpcEndReminderPush(payload));
-            if (sent > 0) {
-              delivered = true;
-              totals.pushRpcEnd += 1;
+        // ── 4. D-1: Race day tomorrow ───────────────────────────────────────
+        if (row.race_date === tomorrow && !row.race_day_reminder_sent_at) {
+          sendJobs.push(async () => {
+            let delivered = false;
+            if (emailEnabled && row.email_reminder_enabled) {
+              const sent = await withRetry(() => sendRaceReminder(row.email, row.name, payload), `race reminder ${row.id}`);
+              if (sent !== null) delivered = true;
             }
-          }
-          if (!delivered) return;
-          updateBuckets.rpc_end_reminder_sent_at.add(row.id);
-          totals.rpcEnd += 1;
-        });
-      }
+            if (pushEnabled) {
+              const { sent } = await sendPushToUser(row.user_id, buildRaceDayPush(payload));
+              if (sent > 0) { delivered = true; totals.pushRace += 1; }
+            }
+            if (!delivered) return;
+            updateBuckets.race_day_reminder_sent_at.add(row.id);
+            totals.race += 1;
+          });
+        }
 
-      // ── 7. D-7: Race in 7 days but no RPC details yet ─────────────────────
-      if (row.race_date === in7days && ['registered', 'upcoming'].includes(row.status) && !row.rpc_date_start && !row.fill_rpc7_reminder_sent_at) {
-        sendJobs.push(async () => {
-          let delivered = false;
-          if (emailEnabled && row.email_reminder_enabled) {
-            const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 7), `fill rpc 7 ${row.id}`);
-            if (sent !== null) delivered = true;
-          }
-          if (pushEnabled) {
-            const { sent } = await sendPushToUser(row.user_id, buildFillRpcReminderPush(payload, 7));
-            if (sent > 0) {
-              delivered = true;
-              totals.pushFillRpc7 += 1;
+        // ── 5. D-1: Race pack collection starts tomorrow ────────────────────
+        if (row.rpc_date_start === tomorrow && !row.rpc_reminder_sent_at) {
+          sendJobs.push(async () => {
+            let delivered = false;
+            if (emailEnabled && row.email_reminder_enabled) {
+              const sent = await withRetry(() => sendRpcReminder(row.email, row.name, payload), `rpc reminder ${row.id}`);
+              if (sent !== null) delivered = true;
             }
-          }
-          if (!delivered) return;
-          updateBuckets.fill_rpc7_reminder_sent_at.add(row.id);
-          totals.fillRpc7 += 1;
-        });
-      }
+            if (pushEnabled) {
+              const { sent } = await sendPushToUser(row.user_id, buildRpcReminderPush(payload));
+              if (sent > 0) { delivered = true; totals.pushRpc += 1; }
+            }
+            if (!delivered) return;
+            updateBuckets.rpc_reminder_sent_at.add(row.id);
+            totals.rpc += 1;
+          });
+        }
 
-      // ── 8. D-3: Race in 3 days but still no RPC details ───────────────────
-      if (row.race_date === in3days && ['registered', 'upcoming'].includes(row.status) && !row.rpc_date_start && !row.fill_rpc3_reminder_sent_at) {
-        sendJobs.push(async () => {
-          let delivered = false;
-          if (emailEnabled && row.email_reminder_enabled) {
-            const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 3), `fill rpc 3 ${row.id}`);
-            if (sent !== null) delivered = true;
-          }
-          if (pushEnabled) {
-            const { sent } = await sendPushToUser(row.user_id, buildFillRpcReminderPush(payload, 3));
-            if (sent > 0) {
-              delivered = true;
-              totals.pushFillRpc3 += 1;
+        // ── 6. D day: RPC ends today, still not collected ───────────────────
+        if (row.rpc_date_end === localToday && row.rpc_status === 'not_collected' && !row.rpc_end_reminder_sent_at) {
+          sendJobs.push(async () => {
+            let delivered = false;
+            if (emailEnabled && row.email_reminder_enabled) {
+              const sent = await withRetry(() => sendRpcEndReminder(row.email, row.name, payload), `rpc end reminder ${row.id}`);
+              if (sent !== null) delivered = true;
             }
-          }
-          if (!delivered) return;
-          updateBuckets.fill_rpc3_reminder_sent_at.add(row.id);
-          totals.fillRpc3 += 1;
-        });
-      }
+            if (pushEnabled) {
+              const { sent } = await sendPushToUser(row.user_id, buildRpcEndReminderPush(payload));
+              if (sent > 0) { delivered = true; totals.pushRpcEnd += 1; }
+            }
+            if (!delivered) return;
+            updateBuckets.rpc_end_reminder_sent_at.add(row.id);
+            totals.rpcEnd += 1;
+          });
+        }
 
-      // ── 9. D+3: Race was 3 days ago, status still registered/upcoming ─────
-      if (row.race_date === minus3 && ['registered', 'upcoming'].includes(row.status) && !row.fill_results_reminder_sent_at) {
-        sendJobs.push(async () => {
-          let delivered = false;
-          if (emailEnabled && row.email_reminder_enabled) {
-            const sent = await withRetry(() => sendFillResultsReminder(row.email, row.name, payload), `fill results ${row.id}`);
-            if (sent !== null) delivered = true;
-          }
-          if (pushEnabled) {
-            const { sent } = await sendPushToUser(row.user_id, buildFillResultsReminderPush(payload));
-            if (sent > 0) {
-              delivered = true;
-              totals.pushFillResults += 1;
+        // ── 7. D-7: Race in 7 days, no RPC details yet ─────────────────────
+        if (row.race_date === in7days && !row.rpc_date_start && !row.fill_rpc7_reminder_sent_at) {
+          sendJobs.push(async () => {
+            let delivered = false;
+            if (emailEnabled && row.email_reminder_enabled) {
+              const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 7), `fill rpc 7 ${row.id}`);
+              if (sent !== null) delivered = true;
             }
-          }
-          if (!delivered) return;
-          updateBuckets.fill_results_reminder_sent_at.add(row.id);
-          totals.fillResults += 1;
-        });
+            if (pushEnabled) {
+              const { sent } = await sendPushToUser(row.user_id, buildFillRpcReminderPush(payload, 7));
+              if (sent > 0) { delivered = true; totals.pushFillRpc7 += 1; }
+            }
+            if (!delivered) return;
+            updateBuckets.fill_rpc7_reminder_sent_at.add(row.id);
+            totals.fillRpc7 += 1;
+          });
+        }
+
+        // ── 8. D-3: Race in 3 days, still no RPC details ───────────────────
+        if (row.race_date === in3days && !row.rpc_date_start && !row.fill_rpc3_reminder_sent_at) {
+          sendJobs.push(async () => {
+            let delivered = false;
+            if (emailEnabled && row.email_reminder_enabled) {
+              const sent = await withRetry(() => sendFillRpcReminder(row.email, row.name, payload, 3), `fill rpc 3 ${row.id}`);
+              if (sent !== null) delivered = true;
+            }
+            if (pushEnabled) {
+              const { sent } = await sendPushToUser(row.user_id, buildFillRpcReminderPush(payload, 3));
+              if (sent > 0) { delivered = true; totals.pushFillRpc3 += 1; }
+            }
+            if (!delivered) return;
+            updateBuckets.fill_rpc3_reminder_sent_at.add(row.id);
+            totals.fillRpc3 += 1;
+          });
+        }
+
+        // ── 9. D+3: Race was 3 days ago, still registered/upcoming ─────────
+        if (row.race_date === minus3 && !row.fill_results_reminder_sent_at) {
+          sendJobs.push(async () => {
+            let delivered = false;
+            if (emailEnabled && row.email_reminder_enabled) {
+              const sent = await withRetry(() => sendFillResultsReminder(row.email, row.name, payload), `fill results ${row.id}`);
+              if (sent !== null) delivered = true;
+            }
+            if (pushEnabled) {
+              const { sent } = await sendPushToUser(row.user_id, buildFillResultsReminderPush(payload));
+              if (sent > 0) { delivered = true; totals.pushFillResults += 1; }
+            }
+            if (!delivered) return;
+            updateBuckets.fill_results_reminder_sent_at.add(row.id);
+            totals.fillResults += 1;
+          });
+        }
       }
     }
 

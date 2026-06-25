@@ -9,6 +9,7 @@ import trainingRoutes from './routes/training.js';
 import icalRoutes from './routes/ical.js';
 import { startScheduler } from './scheduler.js';
 import migrate from "./db/migrate.js";
+import jwt from 'jsonwebtoken';
 import { getAuthToken, signCsrfToken, verifyCsrfToken } from './utils/authCookies.js';
 
 dotenv.config();
@@ -47,8 +48,13 @@ app.use(express.json());
 app.get('/api/auth/csrf', (req, res) => {
   const authToken = getAuthToken(req);
   if (!authToken) return res.status(401).json({ error: 'Unauthorized' });
-  const csrfToken = signCsrfToken(authToken, CSRF_SECRET);
-  res.json({ csrfToken });
+  try {
+    const payload = jwt.verify(authToken, process.env.JWT_SECRET);
+    const csrfToken = signCsrfToken(String(payload.userId), CSRF_SECRET);
+    res.json({ csrfToken });
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 });
 
 app.use((req, res, next) => {
@@ -58,7 +64,12 @@ app.use((req, res, next) => {
 
   const token = req.headers['x-csrf-token'];
   const authToken = getAuthToken(req);
-  if (!verifyCsrfToken(token, authToken, CSRF_SECRET)) {
+  let stableId = null;
+  try {
+    const payload = jwt.verify(authToken, process.env.JWT_SECRET);
+    stableId = String(payload.userId);
+  } catch { /* verifyCsrfToken will fail safely below */ }
+  if (!verifyCsrfToken(token, stableId, CSRF_SECRET)) {
     return res.status(403).json({ error: 'CSRF validation failed' });
   }
   next();

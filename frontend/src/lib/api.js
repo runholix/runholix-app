@@ -190,6 +190,7 @@ export const api = {
   toggleEmailReminder:     (body) => request('/auth/email-reminder', { method: 'PUT', body: JSON.stringify(body) }),
   getPushNotification:     ()     => request('/auth/push-notification'),
   managePushSubscription:  (body) => request('/auth/push-notification', { method: 'PUT', body: JSON.stringify(body) }),
+  testPushNotification:     (body)     => request('/auth/push-notification', { method: 'POST', body: JSON.stringify(body) }),
   adminApprovalDetails: (token) => request(`/auth/admin-approve?token=${encodeURIComponent(token)}`),
   adminApproval:      (body) => request('/auth/admin-approve', { method: 'POST', body: JSON.stringify(body) }),
 

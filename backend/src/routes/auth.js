@@ -17,7 +17,7 @@ import {
   getPushPublicKey,
   upsertPushSubscription,
   setPushSubscriptionEnabled,
-  deletePushSubscription,
+  deletePushSubscription, sendPushToDevice,
 } from '../push.js';
 
 const router = Router();
@@ -1013,6 +1013,22 @@ router.get('/push-notification', requireAuth, async (req, res) => {
       configured: pushEnabled,
       publicKey: getPushPublicKey(),
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/push-notification', requireAuth, async (req, res) => {
+  try {
+    const result = await sendPushToDevice(req.userId, req.deviceId, {
+      title: `${process.env.APP_NAME || 'Runholix'} Test`,
+      body: 'This is a push notification test',
+      url: process.env.APP_URL,
+      tag: 'push-test',
+    })
+
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

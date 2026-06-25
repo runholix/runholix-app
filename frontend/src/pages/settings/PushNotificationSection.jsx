@@ -18,6 +18,16 @@ export default function PushNotificationSection({ user, onUpdate }) {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installed, setInstalled] = useState(isInstalledPwa());
   const [currentEndpoint, setCurrentEndpoint] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [lastSend, setLastSend] = useState();
+  const [canResend, setCanResend] = useState(true);
+
+  setInterval(() => {
+    if (lastSend) {
+      const now = new Date();
+      setCanResend((now - lastSend) >= 5000);
+    }
+  }, 1000);
 
   useEffect(() => {
     const onBeforeInstallPrompt = e => {
@@ -98,6 +108,19 @@ export default function PushNotificationSection({ user, onUpdate }) {
       setResult({ type: 'error', message: err.message });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendTest = async () => {
+    setSending(true);
+    try {
+      await api.testPushNotification({ deviceId: currentEndpoint });
+    } catch (err) {
+      setResult({ type: 'error', message: err.message });
+    } finally {
+      setSending(false);
+      const now = new Date();
+      setLastSend(now);
     }
   };
 
@@ -252,14 +275,23 @@ export default function PushNotificationSection({ user, onUpdate }) {
               )}
 
               <div style={{ paddingTop: 8 }}>
-                <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleAddDevice}
-                    disabled={saving || !configured || !publicKey || isCurrentDeviceRegistered}
-                    title={isCurrentDeviceRegistered ? 'This device is already registered' : undefined}
-                >
-                  {saving ? 'Registering...' : isCurrentDeviceRegistered ? 'Device Already Added' : 'Add This Device'}
-                </button>
+                {isCurrentDeviceRegistered ? (
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleSendTest}
+                        disabled={sending || !configured || !publicKey || !canResend}
+                    >
+                      {sending ? 'Sending...' : canResend ? 'Send test notification' : 'Loading...'}
+                    </button>
+                ) : (
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleAddDevice}
+                        disabled={saving || !configured || !publicKey}
+                    >
+                      {saving ? 'Registering...' : 'Add This Device'}
+                    </button>
+                )}
               </div>
 
               {mobileNeedsInstall && (

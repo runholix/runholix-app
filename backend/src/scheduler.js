@@ -23,12 +23,6 @@ import {
   buildFillResultsReminderPush,
 } from './push.js';
 
-// ── Fix: return TIMESTAMP columns as raw strings so we control timezone interpretation.
-// Without this, the pg driver blindly treats TIMESTAMP as UTC, which is wrong when
-// the value is actually stored in the race's local timezone (e.g. Asia/Bangkok).
-// Type 1114 = TIMESTAMP without time zone
-pg.types.setTypeParser(1114, (val) => val);
-
 const DEFAULT_TZ = process.env.APP_TIMEZONE || 'UTC';
 let schedulerRunning = false;
 

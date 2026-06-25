@@ -40,8 +40,8 @@ self.addEventListener('push', event => {
     const title = payload.title || 'Runholix reminder';
     const options = {
       body: payload.body || '',
-      icon: '/icon.png',
-      badge: '/icon.png',
+      icon: '/light-icon.png',
+      badge: '/light-icon.png',
       tag: payload.tag || undefined,
       data: { url: payload.url || '/' },
     };

@@ -1021,12 +1021,18 @@ router.get('/push-notification', requireAuth, async (req, res) => {
 
 router.post('/push-notification', requireAuth, async (req, res) => {
   try {
-    const result = await sendPushToDevice(req.userId, req.deviceId, {
+    const { deviceId } = req.body;
+    const payload = {
       title: `${process.env.APP_NAME || 'Runholix'} Test`,
       body: 'This is a push notification test',
       url: process.env.APP_URL,
       tag: 'push-test',
-    })
+    };
+    const result = await sendPushToDevice(
+        req.userId,
+        deviceId,
+        payload
+    );
 
     res.json(result);
   } catch (err) {

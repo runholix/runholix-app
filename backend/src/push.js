@@ -85,12 +85,22 @@ export async function sendPushToUser(userId, payload) {
     try {
       await webpush.sendNotification(row.subscription, JSON.stringify(payload));
       sent += 1;
+      console.log(`[push] To: ${userId} | ${payload.title}`);
     } catch (err) {
       const statusCode = err?.statusCode;
       if (statusCode === 404 || statusCode === 410) {
+        // Subscription expired or unregistered — clean it up
+        await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [row.id]);
+      } else if (statusCode === 429) {
+        // Rate limited — log and bail out of remaining sends for this user
+        console.warn(`[push] Rate limited for user ${userId}, backing off`);
+        break;
+      } else if (statusCode === 400) {
+        // Bad subscription data — remove it so we stop retrying a broken record
+        console.warn(`[push] Bad subscription for user ${userId} (id=${row.id}), removing`);
         await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [row.id]);
       } else {
-        console.error(`[push] Failed for user ${userId}:`, err?.message || err);
+        console.error(`[push] Failed for user ${userId} (status=${statusCode}):`, err?.message || err);
       }
     }
   }

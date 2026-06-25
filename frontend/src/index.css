@@ -106,7 +106,7 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(96,153,248,0.15);
 }
 /* Fix date input — force identical sizing to all other inputs */
-input[type="date"] {
+input[type="date"], input[type="datetime"], input[type="datetime-local"] {
   text-align: left;
   appearance: none;
   -webkit-appearance: none;
@@ -117,7 +117,9 @@ input[type="date"] {
   align-items: center;
 }
 /* Date input calendar icon colour in dark mode */
-[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(1) opacity(0.5);
 }
 /* Ensure select option colours are readable */

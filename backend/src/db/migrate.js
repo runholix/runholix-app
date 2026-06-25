@@ -167,7 +167,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   endpoint TEXT NOT NULL UNIQUE,
   subscription JSONB NOT NULL,
-  is_enabled BOOLEAN DEFAULT true,
+  is_enabled BOOLEAN DEFAULT TRUE,
   device_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -202,7 +202,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_sent_count_24h INTEGER N
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_sent_window_start TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN DEFAULT true;
+ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN DEFAULT TRUE;
 ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS device_name TEXT;
 `;
 

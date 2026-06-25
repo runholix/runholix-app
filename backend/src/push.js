@@ -32,7 +32,7 @@ export async function upsertPushSubscription(userId, subscription, deviceName = 
   if (isNewOrDisabled) {
     // 3. Only count devices that are ACTUALLY enabled
     const countRes = await pool.query(
-        'SELECT COUNT(*) FROM push_subscriptions WHERE user_id = $1 AND is_enabled = true',
+        'SELECT COUNT(*) FROM push_subscriptions WHERE user_id = $1 AND is_enabled = TRUE',
         [userId]
     );
 
@@ -44,7 +44,7 @@ export async function upsertPushSubscription(userId, subscription, deviceName = 
   // UPDATED: Added 'is_enabled' to the INSERT/UPDATE query
   await pool.query(
       `INSERT INTO push_subscriptions (user_id, endpoint, subscription, is_enabled, device_name, updated_at)
-       VALUES ($1, $2, $3, true, $4, NOW())
+       VALUES ($1, $2, $3, TRUE, $4, NOW())
          ON CONFLICT (endpoint)
        DO UPDATE SET user_id = EXCLUDED.user_id,
                      subscription = CASE
@@ -52,7 +52,7 @@ export async function upsertPushSubscription(userId, subscription, deviceName = 
                      THEN EXCLUDED.subscription
                      ELSE push_subscriptions.subscription
       END,
-         is_enabled = true,
+         is_enabled = TRUE,
          device_name = COALESCE(EXCLUDED.device_name, push_subscriptions.device_name),
          updated_at = NOW()`,
       [userId, subscription.endpoint, subscription, deviceName]
@@ -77,7 +77,7 @@ export async function deletePushSubscription(userId, endpoint) {
 export async function sendPushToUser(userId, payload) {
   if (!pushEnabled) return { sent: 0, disabled: true };
   const { rows } = await pool.query(
-    'SELECT id, endpoint, subscription FROM push_subscriptions WHERE user_id=$1 AND is_enabled = true',
+    'SELECT id, endpoint, subscription FROM push_subscriptions WHERE user_id=$1 AND is_enabled = TRUE',
     [userId]
   );
   let sent = 0;

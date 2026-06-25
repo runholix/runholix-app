@@ -180,7 +180,7 @@ async function runReminders() {
       WHERE r.status = 'upcoming'
         AND r.registration_datetime IS NOT NULL
         AND u.is_active = TRUE
-        AND (u.email_reminder_enabled = TRUE OR EXISTS (SELECT 1 FROM push_subscriptions WHERE user_id = u.id AND is_enabled = true))
+        AND (u.email_reminder_enabled = TRUE OR EXISTS (SELECT 1 FROM push_subscriptions WHERE user_id = u.id AND is_enabled = TRUE))
         AND (
           r.registration_reminder_d1_sent_at IS NULL
           OR r.registration_reminder_t1h_sent_at IS NULL
@@ -231,7 +231,7 @@ async function runReminders() {
       // ── 2. T-1h: Race registration starts in 1 hour ──────────────────────
       if (regTime && localRegUtc !== null) {
         const oneHourBefore = localRegUtc - (60 * 60 * 1000);
-        if (Math.abs(now.getTime() - oneHourBefore) < 60 * 1000 && !row.registration_reminder_t1h_sent_at) {
+        if (Math.abs(now.getTime() - oneHourBefore) <= 5 * 60 * 1000 && !row.registration_reminder_t1h_sent_at) {
           sendJobs.push(async () => {
             let delivered = false;
             if (emailEnabled && row.email_reminder_enabled) {
@@ -313,11 +313,11 @@ async function runReminders() {
       FROM races r
       JOIN users u ON u.id = r.user_id
       WHERE u.is_active = TRUE
-        AND (u.email_reminder_enabled = TRUE OR EXISTS (SELECT 1 FROM push_subscriptions WHERE user_id = u.id AND is_enabled = true))
+        AND (u.email_reminder_enabled = TRUE OR EXISTS (SELECT 1 FROM push_subscriptions WHERE user_id = u.id AND is_enabled = TRUE))
         AND r.status IN ('registered', 'upcoming')
         AND (
         (r.race_date BETWEEN $2 AND $3 AND (r.race_day_reminder_sent_at IS NULL OR r.fill_rpc7_reminder_sent_at IS NULL OR r.fill_rpc3_reminder_sent_at IS NULL OR r.fill_results_reminder_sent_at IS NULL))
-          OR (r.rpc_date_start BETWEEN $2 AND $3 AND r.rpc_reminder_sent_at IS NULL)
+          OR (r.rpc_date_start BETWEEN $2 AND $3 AND r.rpc_status = 'not_collected' AND r.rpc_reminder_sent_at IS NULL)
           OR (r.rpc_date_end BETWEEN $2 AND $3 AND r.rpc_status = 'not_collected' AND r.rpc_end_reminder_sent_at IS NULL)
         )
     `, [DEFAULT_TZ, windowStart, windowEnd]);
@@ -359,7 +359,7 @@ async function runReminders() {
         }
 
         // ── 5. D-1: Race pack collection starts tomorrow ────────────────────
-        if (row.rpc_date_start === tomorrow && !row.rpc_reminder_sent_at) {
+        if (row.rpc_date_start === tomorrow && row.rpc_status === 'not_collected' && !row.rpc_reminder_sent_at) {
           sendJobs.push(async () => {
             let delivered = false;
             if (emailEnabled && row.email_reminder_enabled) {
@@ -395,7 +395,7 @@ async function runReminders() {
         }
 
         // ── 7. D-7: Race in 7 days, no RPC details yet ─────────────────────
-        if (row.race_date === in7days && !row.rpc_date_start && !row.fill_rpc7_reminder_sent_at) {
+        if (row.race_date === in7days && row.rpc_status === 'not_collected' && !row.rpc_date_start && !row.fill_rpc7_reminder_sent_at) {
           sendJobs.push(async () => {
             let delivered = false;
             if (emailEnabled && row.email_reminder_enabled) {
@@ -413,7 +413,7 @@ async function runReminders() {
         }
 
         // ── 8. D-3: Race in 3 days, still no RPC details ───────────────────
-        if (row.race_date === in3days && !row.rpc_date_start && !row.fill_rpc3_reminder_sent_at) {
+        if (row.race_date === in3days && row.rpc_status === 'not_collected' && !row.rpc_date_start && !row.fill_rpc3_reminder_sent_at) {
           sendJobs.push(async () => {
             let delivered = false;
             if (emailEnabled && row.email_reminder_enabled) {

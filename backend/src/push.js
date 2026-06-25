@@ -88,13 +88,13 @@ export async function sendPushToUser(userId, payload) {
       console.log(`[push] To: ${userId} | ${payload.title}`);
     } catch (err) {
       const statusCode = err?.statusCode;
-      console.error(`[push] Failed for user ${userId} id ${rows[0].id} (status=${statusCode}):`, err?.message || err, err?.body || '');
+      console.error(`[push] Failed for user ${userId} id ${row.id} (status=${statusCode}):`, err?.message || err, err?.body || '');
       if (statusCode === 404 || statusCode === 410 || statusCode === 403) {
         // Subscription expired or unregistered — clean it up
-        await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [rows[0].id]);
+        await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [row.id]);
       } else if (statusCode === 400) {
         // Bad subscription data — remove it so we stop retrying a broken record
-        await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [rows[0].id]);
+        await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [row.id]);
       }
       return { sent, error: err?.message || err }
     }

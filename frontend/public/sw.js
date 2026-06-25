@@ -1,16 +1,11 @@
-const CACHE_PREFIX = 'runholix-shell-v';
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+
+// Injected by vite-plugin-pwa at build time — contains all hashed assets
+precacheAndRoute(self.__WB_MANIFEST);
+cleanupOutdatedCaches();
+
 const PRIVATE_CACHE_PREFIX = 'runholix-private-v';
-const CACHE_NAME = new URL(self.location.href).searchParams.get('v')
-  ? `${CACHE_PREFIX}${new URL(self.location.href).searchParams.get('v')}`
-  : `${CACHE_PREFIX}0`;
-const PRIVATE_CACHE_NAME = new URL(self.location.href).searchParams.get('v')
-  ? `${PRIVATE_CACHE_PREFIX}${new URL(self.location.href).searchParams.get('v')}`
-  : `${PRIVATE_CACHE_PREFIX}0`;
-const APP_SHELL = [
-  '/',
-  '/manifest.webmanifest',
-  '/dark-icon.png',
-];
+const PRIVATE_CACHE_NAME = `${PRIVATE_CACHE_PREFIX}1`;
 
 function isApiRequest(url) {
   return url.pathname.startsWith('/api/') || url.pathname.startsWith('/ical/');
@@ -23,40 +18,10 @@ function isPrivateFileRequest(url) {
   );
 }
 
-async function cacheShell() {
-  const cache = await caches.open(CACHE_NAME);
-  await cache.addAll(APP_SHELL);
-}
-
 async function clearPrivateCache() {
   const keys = await caches.keys();
   await Promise.all(keys.filter(key => key.startsWith(PRIVATE_CACHE_PREFIX)).map(key => caches.delete(key)));
 }
-
-self.addEventListener('install', event => {
-  event.waitUntil((async () => {
-    await cacheShell();
-    await self.skipWaiting();
-  })());
-});
-
-self.addEventListener('activate', event => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(
-        keys
-            .filter(key => key !== CACHE_NAME && key !== PRIVATE_CACHE_NAME)
-            .map(key => caches.delete(key))
-    );
-    await self.clients.claim();
-
-    // Tell all clients a new version is active → they should reload
-    const allClients = await self.clients.matchAll({ type: 'window' });
-    for (const client of allClients) {
-      client.postMessage({ type: 'SW_UPDATED' });
-    }
-  })());
-});
 
 self.addEventListener('message', event => {
   if (event.data?.type === 'CLEAR_PRIVATE_CACHE') {
@@ -110,50 +75,22 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Navigate: cache-first, but always revalidate in background
-  if (request.mode === 'navigate') {
+  // Private files: cache-first with network fallback
+  if (isPrivateFileRequest(url)) {
     event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cachedShell = await cache.match('/') || await cache.match('/index.html');
-
-      // Revalidate in background
-      const networkFetch = fetch('/').then(response => {
-        if (response.ok) cache.put('/', response.clone());
-        return response;
-      }).catch(() => null);
-
-      return cachedShell || await networkFetch || Response.error();
-    })());
-    return;
-  }
-
-  event.respondWith((async () => {
-    try {
-      if (isPrivateFileRequest(url)) {
+      try {
         const cache = await caches.open(PRIVATE_CACHE_NAME);
         const cached = await cache.match(request);
-
         const networkFetch = fetch(request).then(response => {
           if (response?.ok) cache.put(request, response.clone());
           return response;
         }).catch(() => null);
-
         return cached || await networkFetch || Response.error();
+      } catch {
+        return Response.error();
       }
+    })());
+  }
 
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(request);
-
-      const networkFetch = fetch(request).then(response => {
-        if (response?.ok) cache.put(request, response.clone());
-        return response;
-      }).catch(() => null);
-
-      // For JS/CSS assets: if cache miss, WAIT for network (don't serve undefined)
-      const response = cached || await networkFetch;
-      return response || Response.error();
-    } catch {
-      return Response.error();
-    }
-  })());
+  // All other requests are handled by workbox precacheAndRoute above
 });

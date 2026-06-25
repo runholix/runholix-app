@@ -51,6 +51,21 @@ export async function subscribeToPush(publicKey) {
   if (!publicKey) throw new Error('Push notifications are not configured on this server.');
   const registration = await ensureServiceWorker();
   let subscription = await registration.pushManager.getSubscription();
+
+  if (subscription) {
+    // Check if existing subscription was made with the same VAPID key
+    const existingKey = subscription.options?.applicationServerKey;
+    if (existingKey) {
+      const existingKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(existingKey)))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      if (existingKeyBase64 !== publicKey) {
+        // Key mismatch — unsubscribe and resubscribe with the correct key
+        await subscription.unsubscribe();
+        subscription = null;
+      }
+    }
+  }
+
   if (!subscription) {
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,

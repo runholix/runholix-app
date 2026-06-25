@@ -25,7 +25,9 @@ export default function PushNotificationSection({ user, onUpdate }) {
   setInterval(() => {
     if (lastSend) {
       const now = new Date();
-      setCanResend((now - lastSend) >= 5000);
+      if (!canResend) {
+        setCanResend((now - lastSend) >= 5000);
+      }
     }
   }, 1000);
 
@@ -121,6 +123,7 @@ export default function PushNotificationSection({ user, onUpdate }) {
       setSending(false);
       const now = new Date();
       setLastSend(now);
+      setCanResend(false);
     }
   };
 
@@ -168,24 +171,35 @@ export default function PushNotificationSection({ user, onUpdate }) {
     setResult(null);
     try {
       const isEnabled = device.is_enabled;
-      const action = isEnabled ? 'disable' : 'enable';
-      const payload = isEnabled
-          ? { action, endpoint: device.endpoint }
-          : { action, subscription: { endpoint: device.endpoint } };
+      let payload;
 
-      // If we are disabling the current browser's subscription, clean it up locally
       if (isEnabled) {
+        // Disabling — unsubscribe locally if it's the current device
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
         if (subscription && subscription.endpoint === device.endpoint) {
           await unsubscribeFromPush();
+        }
+        payload = { action: 'disable', endpoint: device.endpoint };
+      } else {
+        // Re-enabling — must send full subscription with keys
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if (subscription && subscription.endpoint === device.endpoint) {
+          // Current device — send full subscription data
+          payload = { action: 'enable', subscription: subscription.toJSON(), deviceName: getDeviceName() };
+        } else {
+          // Different device — can only flip the flag, no keys available
+          // This is inherently limited; user should re-add the device from that browser
+          payload = { action: 'enable', subscription: { endpoint: device.endpoint } };
         }
       }
 
       await api.managePushSubscription(payload);
 
       await refresh();
-      setResult({ type: 'success', message: `Device ${action}ed successfully.` });
+      setResult({ type: 'success', message: `Device ${isEnabled ? 'disabled' : 'enabled'} successfully.` });
     } catch (err) {
       setResult({ type: 'error', message: err.message });
     } finally {

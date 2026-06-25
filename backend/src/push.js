@@ -88,7 +88,7 @@ export async function sendPushToUser(userId, payload) {
       console.log(`[push] To: ${userId} | ${payload.title}`);
     } catch (err) {
       const statusCode = err?.statusCode;
-      if (statusCode === 404 || statusCode === 410) {
+      if (statusCode === 404 || statusCode === 410 || statusCode === 403) {
         // Subscription expired or unregistered — clean it up
         await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [row.id]);
       } else if (statusCode === 429) {
@@ -121,7 +121,7 @@ export async function sendPushToDevice(userId, endpoint, payload) {
     console.log(`[push] To: ${userId} | ${payload.title}`);
   } catch (err) {
     const statusCode = err?.statusCode;
-    if (statusCode === 404 || statusCode === 410) {
+    if (statusCode === 404 || statusCode === 410 || statusCode === 403) {
       // Subscription expired or unregistered — clean it up
       await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [rows[0].id]);
     } else if (statusCode === 429) {

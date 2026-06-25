@@ -151,7 +151,7 @@ export async function sendRegistrationFollowup(to, name, race) {
   const link = `${APP_URL}/races/${race.id}`;
   await send(to, `Update your race details: ${race.event_name}`, wrap(`Update your race details`, `
     <p>Hi <strong>${escHtml(name)}</strong>,</p>
-    <p>It has been a few days since you registered for this race. Please review and update the race details if anything has changed.</p>
+    <p>It has been a few days since the race registration opened. Please review and update the race details if anything has changed.</p>
     <div class="info">
       <p><strong>${escHtml(race.event_name)}</strong> <span class="badge badge-race">Race</span></p>
       <p><strong>Race date:</strong> ${escHtml(fmtDate(race.race_date))}</p>

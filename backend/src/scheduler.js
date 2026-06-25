@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import pg from 'pg';
 import pool from './db/pool.js';
 import {
   emailEnabled,
@@ -21,6 +22,12 @@ import {
   buildFillRpcReminderPush,
   buildFillResultsReminderPush,
 } from './push.js';
+
+// ── Fix: return TIMESTAMP columns as raw strings so we control timezone interpretation.
+// Without this, the pg driver blindly treats TIMESTAMP as UTC, which is wrong when
+// the value is actually stored in the race's local timezone (e.g. Asia/Bangkok).
+// Type 1114 = TIMESTAMP without time zone
+pg.types.setTypeParser(1114, (val) => val);
 
 const DEFAULT_TZ = process.env.APP_TIMEZONE || 'UTC';
 let schedulerRunning = false;
@@ -184,14 +191,21 @@ async function runReminders() {
     for (const row of regRows) {
       const tz = row.effective_timezone || DEFAULT_TZ;
       const localToday = formatZonedDate(now, tz);
-      const regDate = String(row.registration_datetime).slice(0, 10);
-      const regTime = String(row.registration_datetime).slice(11, 19);
+
+      // ── Fix: registration_datetime is TIMESTAMP stored in the race's local timezone.
+      // The pg type parser override returns it as a raw string (e.g. "2025-06-10 10:00:00"),
+      // so we slice date and time directly — no UTC reinterpretation needed.
+      const regRaw = String(row.registration_datetime); // "2025-06-10 10:00:00"
+      const regDate = regRaw.slice(0, 10);              // "2025-06-10" — already local calendar date
+      const regTime = regRaw.slice(11, 19);             // "10:00:00"   — already local wall-clock time
       if (!/^\d{4}-\d{2}-\d{2}$/.test(regDate)) continue;
 
+      // localDateTimeToUtcMillis now receives genuinely local values — correct
       const localRegUtc = localDateTimeToUtcMillis(regDate, regTime, tz);
-      const regD3 = addDays(regDate, 3);
+
       const regD1 = addDays(regDate, -1);
-      if (!regD3 || !regD1) continue;
+      const regD3 = addDays(regDate, 3);
+      if (!regD1 || !regD3) continue;
 
       // ── 1. D-1: Race registration starts tomorrow ──────────────────────
       if (localToday === regD1 && !row.registration_reminder_d1_sent_at) {
@@ -460,6 +474,6 @@ export function startScheduler() {
     console.log('[scheduler] Email and push disabled - scheduler not started');
     return;
   }
-  cron.schedule('0,30 * * * *', runReminders);
+  cron.schedule('01,31 * * * *', runReminders);
   console.log('[scheduler] Started - runs at minute 00 and 30');
 }

@@ -475,5 +475,5 @@ export function startScheduler() {
     return;
   }
   cron.schedule('01,31 * * * *', runReminders);
-  console.log('[scheduler] Started - runs at minute 00 and 30');
+  console.log('[scheduler] Started - runs at minute 01 and 31');
 }

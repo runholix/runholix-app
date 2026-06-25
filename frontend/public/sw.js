@@ -128,26 +128,32 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith((async () => {
-    if (isPrivateFileRequest(url)) {
-      const cache = await caches.open(PRIVATE_CACHE_NAME);
-      const cached = await cache.match(request);
-      const fetchPromise = fetch(request).then(response => {
-        if (response && response.ok) {
-          cache.put(request, response.clone());
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    }
+    try {
+      if (isPrivateFileRequest(url)) {
+        const cache = await caches.open(PRIVATE_CACHE_NAME);
+        const cached = await cache.match(request);
 
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(request);
-    const fetchPromise = fetch(request).then(response => {
-      if (response && response.ok) {
-        cache.put(request, response.clone());
+        const networkFetch = fetch(request).then(response => {
+          if (response?.ok) cache.put(request, response.clone());
+          return response;
+        }).catch(() => null);
+
+        return cached || await networkFetch || Response.error();
       }
-      return response;
-    }).catch(() => cached);
-    return cached || fetchPromise;
+
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(request);
+
+      const networkFetch = fetch(request).then(response => {
+        if (response?.ok) cache.put(request, response.clone());
+        return response;
+      }).catch(() => null);
+
+      // For JS/CSS assets: if cache miss, WAIT for network (don't serve undefined)
+      const response = cached || await networkFetch;
+      return response || Response.error();
+    } catch {
+      return Response.error();
+    }
   })());
 });

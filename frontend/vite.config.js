@@ -10,6 +10,7 @@ export default defineConfig({
       strategies: 'injectManifest',   // use your own sw.js
       srcDir: 'public',
       filename: 'sw.js',
+      manifest: false,          // ← don't generate or inject a manifest
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,ico,woff,woff2}'],
       },

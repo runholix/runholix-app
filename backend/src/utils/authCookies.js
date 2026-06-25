@@ -33,11 +33,13 @@ export function verifyCsrfToken(token, authToken, secret) {
 export function buildAuthCookie(token, options = {}) {
   const secure = options.secure ?? false;
   const sameSite = (options.sameSite || 'lax').toLowerCase();
+  const maxAge = options.maxAge ?? 60 * 60 * 24 * 30; // 30 days default
   const parts = [
     `rt_token=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
     `SameSite=${sameSite.charAt(0).toUpperCase() + sameSite.slice(1)}`,
+    `Max-Age=${maxAge}`,
   ];
   if (secure) parts.push('Secure');
   return parts.join('; ');

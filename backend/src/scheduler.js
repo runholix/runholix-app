@@ -450,6 +450,7 @@ async function runReminders() {
       }
     }
 
+    console.log(`[scheduler] Total send jobs queued: ${sendJobs.length}`);
     await runWithConcurrency(sendJobs, 3);
 
     await flushUpdates();

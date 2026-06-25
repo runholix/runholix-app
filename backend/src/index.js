@@ -11,6 +11,7 @@ import { startScheduler } from './scheduler.js';
 import migrate from "./db/migrate.js";
 import jwt from 'jsonwebtoken';
 import { getAuthToken, signCsrfToken, verifyCsrfToken } from './utils/authCookies.js';
+import webpush from 'web-push';
 
 dotenv.config();
 
@@ -90,6 +91,18 @@ migrate()
   .then(() => {
     startScheduler();
     app.listen(PORT, () => console.log(`API running on port ${PORT}`));
+
+    try {
+      webpush.setVapidDetails(
+          process.env.VAPID_SUBJECT,
+          process.env.VAPID_PUBLIC_KEY,
+          process.env.VAPID_PRIVATE_KEY
+      );
+
+      console.log('VAPID loaded OK');
+    } catch (err) {
+      console.error(err);
+    }
   })
   .catch(err => {
     console.error('Startup failed:', err); process.exit(1);

@@ -121,18 +121,13 @@ export async function sendPushToDevice(userId, endpoint, payload) {
     console.log(`[push] To: ${userId} | ${payload.title}`);
   } catch (err) {
     const statusCode = err?.statusCode;
+    console.error(`[push] Failed for user ${userId} id ${rows[0].id} (status=${statusCode}):`, err?.message || err, err?.body || '');
     if (statusCode === 404 || statusCode === 410 || statusCode === 403) {
       // Subscription expired or unregistered — clean it up
       await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [rows[0].id]);
-    } else if (statusCode === 429) {
-      // Rate limited — log and bail out of remaining sends for this user
-      console.warn(`[push] Rate limited for user ${userId}, backing off`);
     } else if (statusCode === 400) {
       // Bad subscription data — remove it so we stop retrying a broken record
-      console.warn(`[push] Bad subscription for user ${userId} (id=${rows[0].id}), removing`);
       await pool.query('DELETE FROM push_subscriptions WHERE id=$1', [rows[0].id]);
-    } else {
-      console.error(`[push] Failed for user ${userId} (status=${statusCode}):`, err?.message || err);
     }
     return { sent, error: err?.message || err }
   }

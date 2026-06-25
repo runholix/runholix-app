@@ -49,6 +49,12 @@ self.addEventListener('activate', event => {
             .map(key => caches.delete(key))
     );
     await self.clients.claim();
+
+    // Tell all clients a new version is active → they should reload
+    const allClients = await self.clients.matchAll({ type: 'window' });
+    for (const client of allClients) {
+      client.postMessage({ type: 'SW_UPDATED' });
+    }
   })());
 });
 
@@ -104,19 +110,19 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Navigate: cache-first, but always revalidate in background
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       const cachedShell = await cache.match('/') || await cache.match('/index.html');
-      if (cachedShell) return cachedShell;
 
-      try {
-        const fresh = await fetch('/');
-        cache.put('/', fresh.clone());
-        return fresh;
-      } catch {
-        return Response.error();
-      }
+      // Revalidate in background
+      const networkFetch = fetch('/').then(response => {
+        if (response.ok) cache.put('/', response.clone());
+        return response;
+      }).catch(() => null);
+
+      return cachedShell || await networkFetch || Response.error();
     })());
     return;
   }

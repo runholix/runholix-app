@@ -6,8 +6,7 @@ export default function PdfViewer({userId, filePath, fileName, label = 'Attachme
     const [fullscreen, setFullscreen] = useState(false);
     if (!filePath || !fileName) return null;
     const url = api.attachmentUrl(userId, filePath.split('/').pop());
-    // Download uses same URL but with Content-Disposition override via query param
-    const downloadUrl = url + '&download=1';
+    const downloadUrl = api.attachmentDownloadUrl(userId, filePath.split('/').pop());
 
     return (
         <div style={{marginBottom: 24}}>

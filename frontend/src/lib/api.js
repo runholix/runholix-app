@@ -253,6 +253,8 @@ export const api = {
     request(`/upload/attachment/${userId}/${filename}`, { method: 'DELETE' }),
   attachmentUrl:       (userId, filename) =>
     `${BASE}/upload/attachment/${userId}/${encodeURIComponent(filename)}`,
+  attachmentDownloadUrl:       (userId, filename) =>
+      `${BASE}/upload/attachment-download/${userId}/${encodeURIComponent(filename)}`,
 
   // RPC attachment reuses the same PDF endpoint — kept as a named alias for clarity
   uploadRpcAttachment: (file)             => uploadFile('/upload/attachment', file),

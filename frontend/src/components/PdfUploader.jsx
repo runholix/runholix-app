@@ -33,7 +33,8 @@ function PdfUploader({ filePath, fileName, userId, onChange, onClear, hint=undef
 
     if (filePath && fileName) {
         const url = api.attachmentUrl(userId, filePath.split('/').pop());
-        const downloadUrl = url + '&download=1';
+        const downloadUrl = api.attachmentDownloadUrl(userId, filePath.split('/').pop());
+
         return (
             <div>
                 <div style={{

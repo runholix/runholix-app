@@ -215,6 +215,24 @@ router.get('/attachment/:userId/:filename', (req, res, next) => {
   res.sendFile(filePath);
 });
 
+// ── GET /api/upload/attachment-download/:userId/:filename ──────────────────────────
+router.get('/attachment-download/:userId/:filename', (req, res, next) => {
+  if (req.query.token && !req.headers.authorization) {
+    req.headers.authorization = 'Bearer ' + req.query.token;
+  }
+  next();
+}, requireAuth, (req, res) => {
+  if (req.params.userId !== req.userId) return res.status(403).json({ error: 'Forbidden' });
+
+  const filePath = safeFilePath(req.params.userId, req.params.filename);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  const displayName = sanitiseOriginalName(req.query.name || req.params.filename);
+  res.setHeader('Content-Disposition', `attachment; filename="${displayName}"`);
+  res.sendFile(filePath);
+});
+
 // ── DELETE /api/upload/attachment/:userId/:filename ───────────────────────
 router.delete('/attachment/:userId/:filename', requireAuth, (req, res) => {
   if (req.params.userId !== req.userId) return res.status(403).json({ error: 'Forbidden' });

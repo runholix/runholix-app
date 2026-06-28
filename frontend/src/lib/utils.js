@@ -42,6 +42,10 @@ export function fmtTime(sec) {
     return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
 }
 
+export function fmtDate(val) {
+    return val ? format(parseISO(val), 'dd MMM yyyy') : null;
+}
+
 export function fmtDateTime(value) {
     if (!value) return null;
     return format(parseISO(String(value).replace(' ', 'T')), 'dd MMM yyyy, HH:mm');
@@ -67,7 +71,7 @@ export function paceStr(sec, distKm) {
 }
 
 // Locale-formatted number with optional decimal places and suffix
-export function fmtNum(v, { decimals, suffix = '' } = {}) {
+export function fmtNum(v, { decimals = 0, suffix = '' } = {}) {
     if (v === null || v === undefined || v === '') return null;
     const n = Number(v);
     if (isNaN(n)) return null;
@@ -79,7 +83,7 @@ export function fmtNum(v, { decimals, suffix = '' } = {}) {
 
 export function fmtDist(km) {
     if (!km) return '—';
-    return km >= 1000 ? `${(km/1000).toFixed(1)}k km` : `${parseFloat(km).toFixed(1)} km`;
+    return fmtNum(km, { decimals: 0, suffix: 'km' });
 }
 
 export function validatePdfFile(file) {

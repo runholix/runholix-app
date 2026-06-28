@@ -1,5 +1,5 @@
 import {useEffect, useRef} from "react";
-import {format, parseISO} from "date-fns";
+import { fmtDate } from "../../lib/utils.js";
 
 export default function TrainingPopup({ plan, anchorRect, onEdit, onDelete, onClose }) {
     const ref = useRef();
@@ -58,7 +58,7 @@ export default function TrainingPopup({ plan, anchorRect, onEdit, onDelete, onCl
                 </div>
 
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
-                    <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 4 }} />{format(parseISO(plan.plan_date), 'dd MMM yyyy')}</span>
+                    <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 4 }} />{fmtDate(plan.plan_date)}</span>
                     {plan.plan_time && <span><i className="ti ti-clock" style={{ verticalAlign: '-2px', marginRight: 4 }} />{plan.plan_time}</span>}
                     {plan.race_name && <span><i className="ti ti-trophy" style={{ verticalAlign: '-2px', marginRight: 4 }} />{plan.race_name}</span>}
                 </div>

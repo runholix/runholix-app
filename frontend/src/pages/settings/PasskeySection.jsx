@@ -4,11 +4,7 @@ import { api } from "../../lib/api.js";
 import { Section } from "./SettingsPage.jsx";
 import Alert from "../../components/Alert.jsx";
 import RequiredMarker from "../../components/RequiredMarker.jsx";
-
-function fmtDate(value) {
-    if (!value) return "Never";
-    return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
+import { fmtDate } from "../../lib/utils.js";
 
 export default function PasskeySection() {
     const [passkeys, setPasskeys] = useState([]);

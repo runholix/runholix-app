@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { format, parseISO, startOfDay } from "date-fns";
-import { fmtTime } from "../../../lib/utils.js";
+import { fmtNum, fmtTime } from "../../../lib/utils.js";
 import { api } from "../../../lib/api.js";
 import { useState } from "react";
 import Alert from "../../../components/Alert.jsx";
@@ -87,9 +87,9 @@ export default function HeaderSection({ race, id, rpcTabVisible }) {
                 <div className="result-cards">
                     {[
                         { label: 'Finish time', value: fmtTime(race.finish_time_seconds), icon: 'ti-clock', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
-                        { label: 'Overall place', value: race.overall_place ? `${Number(race.overall_place).toLocaleString("en-US")}${race.overall_total ? ` / ${Number(race.overall_total).toLocaleString("en-US")}` : ''}` : '—', icon: 'ti-users', color: 'var(--color-primary)', bg: 'var(--color-primary-bg)' },
-                        { label: 'Gender place', value: race.gender_place ? `${Number(race.gender_place).toLocaleString("en-US")}${race.gender_total ? ` / ${Number(race.gender_total).toLocaleString("en-US")}` : ''}` : '—', icon: 'ti-user', color: '#7c3aed', bg: '#faf5ff' },
-                        { label: 'Age group', value: race.age_group_place ? `${Number(race.age_group_place).toLocaleString("en-US")}${race.age_group_total ? ` / ${Number(race.age_group_total).toLocaleString("en-US")}` : ''} ${race.age_group_label || ''}`.trim() : '—', icon: 'ti-medal', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+                        { label: 'Overall place', value: race.overall_place ? `${fmtNum(race.overall_place)}${race.overall_total ? ` / ${fmtNum(race.overall_total)}` : ''}` : '—', icon: 'ti-users', color: 'var(--color-primary)', bg: 'var(--color-primary-bg)' },
+                        { label: 'Gender place', value: race.gender_place ? `${fmtNum(race.gender_place)}${race.gender_total ? ` / ${fmtNum(race.gender_total)}` : ''}` : '—', icon: 'ti-user', color: '#7c3aed', bg: '#faf5ff' },
+                        { label: 'Age group', value: race.age_group_place ? `${fmtNum(race.age_group_place)}${race.age_group_total ? ` / ${fmtNum(race.age_group_total)}` : ''} ${race.age_group_label || ''}`.trim() : '—', icon: 'ti-medal', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
                     ].map(s => (
                         <div key={s.label} className="card" style={{ padding: 14 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>

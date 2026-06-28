@@ -1,5 +1,5 @@
-import { format, parseISO } from "date-fns";
 import PdfViewer from "../../../components/PdfViewer.jsx";
+import { fmtDate } from "../../../lib/utils.js";
 
 export default function RacePackCollectionSection({ user, race }) {
     return (
@@ -21,9 +21,9 @@ export default function RacePackCollectionSection({ user, race }) {
                     <div>
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 3 }}>Collection dates</div>
                         <div style={{ fontWeight: 500, fontSize: 14 }}>
-                            {format(parseISO(race.rpc_date_start), 'dd MMM yyyy')}
+                            {fmtDate(race.rpc_date_start)}
                             {race.rpc_date_end && race.rpc_date_end !== race.rpc_date_start
-                                ? ` – ${format(parseISO(race.rpc_date_end), 'dd MMM yyyy')}`
+                                ? ` – ${fmtDate(race.rpc_date_end)}`
                                 : ''}
                         </div>
                     </div>

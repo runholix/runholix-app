@@ -1,5 +1,5 @@
 import { Field, Section } from "./RaceDetailPage.jsx";
-import { fmtDateTime, paceStr, parseTimeStr } from "../../../lib/utils.js";
+import { fmtDateTime, fmtNum, paceStr, parseTimeStr } from "../../../lib/utils.js";
 import PdfViewer from "../../../components/PdfViewer.jsx";
 
 export default function RegistrationSection({ user, race }) {
@@ -12,7 +12,7 @@ export default function RegistrationSection({ user, race }) {
                 <Field label="Bib number" value={race.bib_number} />
                 <Field label="Name on BIB" value={race.bib_name} />
                 <Field label="Confirmation #" value={race.confirmation_number} />
-                <Field label="Registration fee" value={race.registration_fee ? `${Number(race.registration_fee).toLocaleString("en-US")} ${race.registration_currency || 'USD'}` : null} />
+                <Field label="Registration fee" value={race.registration_fee ? `${fmtNum(race.registration_fee, { suffix: race.registration_currency || 'USD' })}` : null} />
                 <Field label="Jersey size" value={race.jersey_size} />
                 <Field label="Registered email" value={race.registered_email} />
                 <Field label="Registered phone" value={race.registered_phone} />

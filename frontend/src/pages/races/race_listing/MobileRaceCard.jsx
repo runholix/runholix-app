@@ -1,7 +1,6 @@
 import { STATUS_META } from "./RacesPage.jsx";
 import { Link } from "react-router-dom";
-import { format, parseISO } from "date-fns";
-import { fmtTime } from "../../../lib/utils.js";
+import { fmtDate, fmtNum, fmtTime } from "../../../lib/utils.js";
 
 export default function MobileRaceCard({ r, listState }) {
     const sm = STATUS_META[r.status] || {};
@@ -15,9 +14,9 @@ export default function MobileRaceCard({ r, listState }) {
                     <span className={`badge ${sm.cls}`} style={{ flexShrink: 0 }}>{sm.label}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    {r.race_date && <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 3 }} />{format(parseISO(r.race_date), 'dd MMM yyyy')}</span>}
+                    {r.race_date && <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 3 }} />{fmtDate(r.race_date)}</span>}
                     {(r.city || r.location) && <span><i className="ti ti-map-pin" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.city || r.location}</span>}
-                    {(r.distance_label || r.distance_km) && <span><i className="ti ti-route" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.distance_label || `${parseFloat(r.distance_km).toFixed(1)} km`}</span>}
+                    {(r.distance_label || r.distance_km) && <span><i className="ti ti-route" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.distance_label || fmtNum(r.distance_km, { decimals: 1, suffix: 'km' })}</span>}
                     {r.race_type && <span><i className="ti ti-tag" style={{ verticalAlign: '-2px', marginRight: 3 }} />{r.race_type.charAt(0).toUpperCase() + r.race_type.slice(1)}</span>}
                 </div>
                 {(r.finish_time_seconds || r.bib_number) && (

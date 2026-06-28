@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-import { format, parseISO } from "date-fns";
-import { fmtTime } from "../../../lib/utils.js";
+import { fmtDate, fmtNum, fmtTime } from "../../../lib/utils.js";
 import { STATUS_META } from "./RacesPage.jsx";
 
 export default function Table({ paged, listState }) {
@@ -32,8 +31,8 @@ export default function Table({ paged, listState }) {
                                 </Link>
                                 {r.city && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{r.city}{r.country ? `, ${r.country}` : ''}</div>}
                             </td>
-                            <td style={{ whiteSpace: 'nowrap' }}>{r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'}</td>
-                            <td>{r.distance_label || (r.distance_km ? `${parseFloat(r.distance_km).toFixed(1)} km` : '—')}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{r.race_date ? fmtDate(r.race_date) : '—'}</td>
+                            <td>{r.distance_label || (r.distance_km ? fmtNum(r.distance_km, { decimals: 1, suffix: 'km' }) : '—')}</td>
                             <td>
                                 {r.race_type ? (
                                     <span style={{

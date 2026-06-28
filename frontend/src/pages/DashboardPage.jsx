@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { api } from '../lib/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
-import { format, parseISO } from 'date-fns';
-import { fmtDist, fmtNum, fmtTime, paceStr } from "../lib/utils.js";
+import { fmtDate, fmtDist, fmtNum, fmtTime, paceStr } from "../lib/utils.js";
 
 function YearTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -14,7 +13,7 @@ function YearTooltip({ active, payload, label }) {
       <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
       <div>Races: {row.count ?? 0}</div>
       <div>Distance: {fmtDist(row.total_distance_km)}</div>
-      <div>Elevation: {Number(row.total_elevation_m || 0).toLocaleString('en-US')} m</div>
+      <div>Elevation: {fmtNum(row.total_elevation_m, { suffix: 'm' })}</div>
     </div>
   );
 }
@@ -79,7 +78,7 @@ export default function DashboardPage() {
               { label: 'Races completed', value: stats?.total_completed || 0, icon: 'ti-trophy', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
               { label: 'Upcoming', value: stats?.upcoming_count || 0, icon: 'ti-calendar-event', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
               { label: 'Total distance', value: fmtDist(stats?.total_distance_km), icon: 'ti-route', color: 'var(--color-primary)', bg: 'var(--color-primary-bg)' },
-              { label: 'Total elevation', value: stats?.total_elevation_m > 0 ? `${Number(stats.total_elevation_m).toLocaleString("en-US")} m` : '—', icon: 'ti-mountain', color: 'var(--color-purple)', bg: 'var(--color-purple-bg)' },
+              { label: 'Total elevation', value: stats?.total_elevation_m > 0 ? `${fmtNum(stats.total_elevation_m, { suffix: 'm' })}` : '—', icon: 'ti-mountain', color: 'var(--color-purple)', bg: 'var(--color-purple-bg)' },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -177,7 +176,7 @@ export default function DashboardPage() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.event_name}</div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                      {r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'} · {r.city || r.location || '—'}
+                      {r.race_date ? fmtDate(r.race_date) : '—'} · {r.city || r.location || '—'}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
@@ -200,7 +199,7 @@ export default function DashboardPage() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.event_name}</div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                      {r.race_date ? format(parseISO(r.race_date), 'dd MMM yyyy') : '—'} · {r.distance_label || (r.distance_km ? `${fmtNum(r.distance_km, { decimals: 1, suffix: 'km' })}` : '')}
+                      {r.race_date ? fmtDate(r.race_date) : '—'} · {r.distance_label || (r.distance_km ? `${fmtNum(r.distance_km, { decimals: 1, suffix: 'km' })}` : '')}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>

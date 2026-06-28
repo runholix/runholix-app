@@ -17,9 +17,9 @@ export default function ResultSection({ user, race }) {
                             ? [fmtTime(race.gun_time_seconds), paceStr(race.gun_time_seconds, (race?.actual_distance_km || race.distance_km))].filter(Boolean).join(' · ')
                             : null
                     } mono />
-                    <Field label="Overall" value={race.overall_place ? `${Number(race.overall_place).toLocaleString("en-US")}${race.overall_total ? ` / ${Number(race.overall_total).toLocaleString("en-US")}` : ''}` : null} />
-                    <Field label="Gender" value={race.gender_place ? `${Number(race.gender_place).toLocaleString("en-US")}${race.gender_total ? ` / ${Number(race.gender_total).toLocaleString("en-US")}` : ''}` : null} />
-                    <Field label="Age group" value={race.age_group_place ? `${Number(race.age_group_place).toLocaleString("en-US")}${race.age_group_total ? ` / ${Number(race.age_group_total).toLocaleString("en-US")}` : ''} ${race.age_group_label || ''}`.trim() : null} />
+                    <Field label="Overall" value={race.overall_place ? `${fmtNum(race.overall_place)}${race.overall_total ? ` / ${fmtNum(race.overall_total)}` : ''}` : null} />
+                    <Field label="Gender" value={race.gender_place ? `${fmtNum(race.gender_place)}${race.gender_total ? ` / ${fmtNum(race.gender_total)}` : ''}` : null} />
+                    <Field label="Age group" value={race.age_group_place ? `${fmtNum(race.age_group_place)}${race.age_group_total ? ` / ${fmtNum(race.age_group_total)}` : ''} ${race.age_group_label || ''}`.trim() : null} />
                 </Section>
             )}
 
@@ -42,9 +42,9 @@ export default function ResultSection({ user, race }) {
                 <Section title="Conditions & vitals">
                     <Field label="Avg heart rate" value={fmtNum(race.heart_rate_avg, { suffix: 'bpm' })} />
                     <Field label="Max heart rate" value={fmtNum(race.heart_rate_max, { suffix: 'bpm' })} />
-                    <Field label="Actual distance" value={fmtNum(race.actual_distance_km, { decimals: 3, suffix: 'km' })} />
+                    <Field label="Actual distance" value={fmtNum(race.actual_distance_km, { decimals: 2, suffix: 'km' })} />
                     <Field label="Elevation gain" value={fmtNum(race.elevation_gain_m, { suffix: 'm' })} />
-                    <Field label="Temperature" value={race.weather_temp_c != null ? `${Number(race.weather_temp_c).toLocaleString("en-US")}°C` : null} />
+                    <Field label="Temperature" value={race.weather_temp_c != null ? `${fmtNum(race.weather_temp_c, { suffix: '°C' })}` : null} />
                     <Field label="Weather" value={race.weather_condition} />
                 </Section>
             )}

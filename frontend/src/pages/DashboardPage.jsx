@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { api } from '../lib/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { fmtDate, fmtDist, fmtNum, fmtTime, paceStr } from "../lib/utils.js";
+import Alert from "../components/Alert.jsx";
 
 function YearTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -73,6 +74,9 @@ export default function DashboardPage() {
         <div className="alert-error">{error}</div>
       ) : (
         <>
+          <div style={{ marginBottom: 15 }}>
+            <Alert type="warning" message="This is only a demo web which serves dummy data without any real server behind it. Do not store your data here, or else you will lose it on page refresh!" />
+          </div>
           <div className="grid-stats" style={{ marginBottom: 24 }}>
             {[
               { label: 'Races completed', value: stats?.total_completed || 0, icon: 'ti-trophy', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },

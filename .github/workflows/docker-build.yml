@@ -59,7 +59,7 @@ jobs:
           push: true
           build-args: |
             VITE_API_URL=/api
-            VITE_APP_NAME=Runholix
+            VITE_APP_NAME=Runholix Demo
           tags: |
             ${{ env.IMAGE_PREFIX }}-frontend:latest
             ${{ env.IMAGE_PREFIX }}-frontend:${{ steps.frontend_version.outputs.version }}

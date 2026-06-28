@@ -8,7 +8,8 @@ import PasskeySection from "./PasskeySection.jsx";
 import CalendarFeedSection from "./CalendarFeedSection.jsx";
 import TimezoneSection from "./TimezoneSection.jsx";
 import PushNotificationSection from "./PushNotificationSection.jsx";
-import {APP_VERSION} from "../../lib/version.js";
+import { APP_VERSION } from "../../lib/version.js";
+import Alert from "../../components/Alert.jsx";
 
 // ── Generic section card ───────────────────────────────────────────────────
 export function Section({ title, description, children }) {
@@ -40,6 +41,10 @@ export default function SettingsPage() {
         <p className="page-subtitle">Manage your profile and security settings.</p>
       </div>
 
+      <div style={{ marginBottom: 15 }}>
+        <Alert type="warning" message="This is only a demo web which serves dummy data without any real server behind it. Do not store your data here, or else you will lose it on page refresh!" />
+      </div>
+
       <AvatarSection   user={currentUser} onUpdate={handleUpdate} />
       <NameSection     user={currentUser} onUpdate={u => handleUpdate({ name: u.name })} />
       <TimezoneSection user={currentUser} onUpdate={u => handleUpdate({ timezone: u.timezone })} />
@@ -49,7 +54,7 @@ export default function SettingsPage() {
       <PasskeySection />
       <CalendarFeedSection />
       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'center', margin: "25px 0 10px" }}>
-          Runholix v{APP_VERSION}<br/>
+          Runholix Demo v{APP_VERSION}<br/>
           <a href="https://github.com/runholix/runholix-app" target="_blank">
               <i className="ti ti-brand-github" /> GitHub
           </a>

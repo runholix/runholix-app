@@ -4,6 +4,7 @@ import { api } from '../../../lib/api.js';
 import Pagination from "./Pagination.jsx";
 import MobileRaceCard from "./MobileRaceCard.jsx";
 import Table from "./Table.jsx";
+import Alert from "../../../components/Alert.jsx";
 
 function usePageSize(page, setPage) {
   const [size, setSize] = useState(() => window.innerWidth < 768 ? 5 : 10);
@@ -144,6 +145,10 @@ export default function RacesPage() {
         <Link to="/races/new" className="btn btn-primary">
           <i className="ti ti-plus" /> Add race
         </Link>
+      </div>
+
+      <div style={{ marginBottom: 15 }}>
+        <Alert type="warning" message="This is only a demo web which serves dummy data without any real server behind it. Do not store your data here, or else you will lose it on page refresh!" />
       </div>
 
       <div className="filters-bar">

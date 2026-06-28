@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
-import APP_NAME from '../lib/appName.js';
 import { APP_VERSION } from '../lib/version.js';
 import ThemeToggle from './ThemeToggle.jsx';
 import { api } from '../lib/api.js';
@@ -56,7 +55,7 @@ function SidebarContent({ user, onLogout, onClose, avatarTs }) {
             }}>
               <i className="ti ti-run" />
             </div>
-            <span style={{ fontWeight: 600, fontSize: 15 }}>{APP_NAME}</span>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>Runholix Demo</span>
           </div>
           {onClose && (
             <button onClick={onClose} className="btn btn-ghost" style={{ padding: 4 }} aria-label="Close menu">
@@ -139,7 +138,7 @@ export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleLogout = () => {
-    if (!window.confirm(`Sign out of ${APP_NAME}?`)) return;
+    if (!window.confirm(`Sign out of Runholix Demo?`)) return;
     logout();
     navigate('/login');
   };
@@ -174,7 +173,7 @@ export default function Layout() {
             }}>
               <i className="ti ti-run" />
             </div>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>{APP_NAME}</span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Runholix Demo</span>
           </div>
           {/* Compact icon-only toggle in topbar */}
           <ThemeToggle compact={true} />

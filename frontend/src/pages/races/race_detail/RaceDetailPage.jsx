@@ -12,6 +12,7 @@ import LinkSection from "./LinkSection.jsx";
 import ResultSection from "./ResultSection.jsx";
 import HeaderSection from "./HeaderSection.jsx";
 import TabButton from "../../../components/TabButton.jsx";
+import Alert from "../../../components/Alert.jsx";
 
 function hasAnyValue(value) {
   if (value == null) return false;
@@ -166,6 +167,10 @@ export default function RaceDetailPage() {
       >
         <i className="ti ti-arrow-left" /> {fromCalendar ? 'Back to calendar' : 'Back to races'}
       </Link>
+
+      <div style={{ marginBottom: 15 }}>
+        <Alert type="warning" message="This is only a demo web which serves dummy data without any real server behind it. Do not store your data here, or else you will lose it on page refresh!" />
+      </div>
 
       {loading ? (
         <div className="alert-info">Loading...</div>

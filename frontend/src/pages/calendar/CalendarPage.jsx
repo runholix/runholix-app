@@ -18,6 +18,7 @@ import useWindowWidth from "../../hooks/useWindowWidth.jsx";
 import ViewSwitcher from "./ViewSwitcher.jsx";
 import Legend from "./Legend.jsx";
 import CalendarPagination from "./CalendarPagination.jsx";
+import Alert from "../../components/Alert.jsx";
 
 export const EVENT_COLORS = {
   race:     { bg: '#dbeafe', border: '#3b82f6', text: '#1d40b0' },
@@ -231,6 +232,10 @@ export default function CalendarPage() {
         <button onClick={handleAddClick} className="btn btn-primary btn-sm">
           <i className="ti ti-plus" /> <span className="tablet-up" style={{ display: 'contents' }}>Add training plan</span>
         </button>
+      </div>
+
+      <div style={{ marginBottom: 15 }}>
+        <Alert type="warning" message="This is only a demo web which serves dummy data without any real server behind it. Do not store your data here, or else you will lose it on page refresh!" />
       </div>
 
       {/* Toolbar: view switcher + nav + today */}

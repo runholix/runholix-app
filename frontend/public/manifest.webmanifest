@@ -1,6 +1,6 @@
 {
-  "name": "Runholix",
-  "short_name": "Runholix",
+  "name": "Runholix Demo",
+  "short_name": "Runholix Demo",
   "description": "Track races, training plans, and race day details.",
   "start_url": "/",
   "scope": "/",

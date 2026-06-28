@@ -11,6 +11,7 @@ import RacePackCollectionSection from "./RacePackCollectionSection.jsx";
 import ResultSection from "./ResultSection.jsx";
 import { useAuth } from "../../../hooks/useAuth.jsx";
 import TabButton from "../../../components/TabButton.jsx";
+import Alert from "../../../components/Alert.jsx";
 
 // ── Default state ─────────────────────────────────────────────────────────
 const EMPTY = {
@@ -235,6 +236,10 @@ export default function RaceFormPage() {
 
       {error && <div className="alert-error">{error}</div>}
       {loading && <div className="alert-info">Loading...</div>}
+
+      <div style={{ marginBottom: 15 }}>
+        <Alert type="warning" message="This is only a demo web which serves dummy data without any real server behind it. Do not store your data here, or else you will lose it on page refresh!" />
+      </div>
 
       <form onSubmit={submit}>
         <div className="card">

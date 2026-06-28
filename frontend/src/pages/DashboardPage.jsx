@@ -207,7 +207,7 @@ export default function DashboardPage() {
                     {paceStr(r.finish_time_seconds, r.distance_km) && (
                       <div style={{ fontSize: 11, color: 'var(--color-text-hint)', marginTop: 1 }}>{paceStr(r.finish_time_seconds, r.distance_km)}</div>
                     )}
-                    {r.overall_place && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 1 }}>#{r.overall_place}{r.overall_total ? `/${r.overall_total}` : ''}</div>}
+                    {r.overall_place && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 1 }}>#{fmtNum(r.overall_place)}{r.overall_total ? `/${fmtNum(r.overall_total)}` : ''}</div>}
                   </div>
                 </Link>
               ))}

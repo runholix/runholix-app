@@ -234,7 +234,7 @@ router.get('/dashboard', async (req, res) => {
 
 // ── LIST ──────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
-  const { status, year, search, sort = 'race_date', order = 'desc', page = '1', pageSize = '10' } = req.query;
+  const { status, year, search, page = '1', pageSize = '10' } = req.query;
   const limit = Math.max(1, Math.min(100, Number(pageSize) || 10));
   const currentPage = Math.max(1, Number(page) || 1);
   const offset = (currentPage - 1) * limit;
@@ -251,10 +251,8 @@ router.get('/', async (req, res) => {
     where += ` AND (r.event_name ILIKE $${i} OR r.location ILIKE $${i} OR r.city ILIKE $${i})`;
     params.push(`%${search}%`); i++;
   }
-  const safeSort  = ['r.race_date','r.event_name','r.distance_km','r.finish_time_seconds','r.created_at'].includes(sort) ? sort : 'r.race_date';
-  const safeOrder = order === 'asc' ? 'ASC' : 'DESC';
   const countSql = `SELECT COUNT(*)::int AS total${where}`;
-  const dataSql = `SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime, r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end${where} ORDER BY ${safeSort} ${safeOrder} LIMIT $${i} OFFSET $${i + 1}`;
+  const dataSql = `SELECT r.*, r.race_date::text AS race_date, r.registration_datetime::text AS registration_datetime, r.rpc_date_start::text AS rpc_date_start, r.rpc_date_end::text AS rpc_date_end${where} ORDER BY r.race_date DESC, r.event_name ASC LIMIT $${i} OFFSET $${i + 1}`;
   try {
     const { rows: countRows } = await pool.query(countSql, params);
     const { rows } = await pool.query(dataSql, [...params, limit, offset]);
